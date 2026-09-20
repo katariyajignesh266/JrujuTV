@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ─────────────────────────────────────────── */
+:root {
+  --color-brand-primary:   #E53935;
+  --color-brand-secondary: #FF8F00;
+  --color-brand-tertiary:  #7C4DFF;
+
+  --color-bg-primary:    #FFFFFF;
+  --color-bg-secondary:  #F5F5F5;
+  --color-bg-elevated:   #FFFFFF;
+
+  --color-text-primary:   #0F0F0F;
+  --color-text-secondary: #606060;
+  --color-text-disabled:  #909090;
+
+  --color-border: #E5E5E5;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+
+  --header-h: 56px;
+  --bottom-nav-h: 56px;
+  --sidebar-collapsed-w: 72px;
+  --sidebar-expanded-w: 240px;
+}
+
+.dark {
+  --color-bg-primary:    #0F0F0F;
+  --color-bg-secondary:  #1A1A1A;
+  --color-bg-elevated:   #272727;
+
+  --color-text-primary:   #F1F1F1;
+  --color-text-secondary: #AAAAAA;
+  --color-text-disabled:  #717171;
+
+  --color-border: #3F3F3F;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.20);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.30);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.40);
+}
+
+/* ─── Base ──────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  min-height: 100dvh;
+  line-height: 1.5;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+}
+
+/* ─── Focus Visible (Accessibility) ────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #3F3F3F;
+}
+
+/* ─── Utility Classes ───────────────────────────────────────── */
+@layer utilities {
+  .transition-theme {
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .min-touch {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .text-fluid-sm {
+    font-size: clamp(0.75rem, 2vw, 0.875rem);
+  }
+
+  .text-fluid-base {
+    font-size: clamp(0.875rem, 2.5vw, 1rem);
+  }
+
+  .text-fluid-lg {
+    font-size: clamp(1rem, 3vw, 1.25rem);
+  }
+
+  .text-fluid-xl {
+    font-size: clamp(1.125rem, 4vw, 1.5rem);
+  }
+
+  .text-fluid-2xl {
+    font-size: clamp(1.25rem, 5vw, 2rem);
+  }
+}
+
