@@ -18,9 +18,11 @@ export function DesktopHeader() {
     <header
       className={cn(
         'sticky top-0 z-50 h-14',
-        'bg-surface-primary border-b border-border',
+        'bg-surface-primary/80 backdrop-blur-xl',
+        'border-b border-white/10 dark:border-white/5',
+        'shadow-[0_1px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_24px_rgba(0,0,0,0.25)]',
         'transition-theme',
-        'hidden md:flex items-center gap-3 px-4' // Visible on tablet (768px) and desktop
+        'hidden md:flex items-center gap-3 pl-3 pr-4' // Visible on tablet (768px) and desktop
       )}
     >
       {/* Left: Hamburger + Logo */}

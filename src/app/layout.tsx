@@ -5,6 +5,7 @@ import { DesktopHeader } from '@/components/layout/DesktopHeader';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavBar } from '@/components/layout/BottomNavBar';
 import { SidebarDrawer } from '@/components/layout/SidebarDrawer';
+import { ScrollToTop } from '@/components/layout/ScrollToTop';
 import { AuthModal } from '@/components/auth/AuthModal';
 
 export const metadata: Metadata = {
@@ -59,6 +60,9 @@ export default function RootLayout({
 
           {/* Sidebar (desktop only) */}
           <SidebarDrawer />
+
+          {/* Reset scroll on route change */}
+          <ScrollToTop />
 
           {/* Page content */}
           {children}

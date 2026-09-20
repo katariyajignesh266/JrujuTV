@@ -28,7 +28,7 @@ function CategoryChips() {
     <nav aria-label="Content categories" className="relative">
       <ul
         role="list"
-        className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1"
+        className="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-hide -mx-1 px-1"
         style={{ scrollbarWidth: 'none' }}
       >
         {categories.map((cat, i) => (
@@ -36,12 +36,21 @@ function CategoryChips() {
             <button
               type="button"
               className={`
-                px-3.5 sm:px-4 py-1.5 rounded-full text-[13px] font-medium
-                transition-all duration-150 whitespace-nowrap min-touch
+                px-3 py-1 rounded-full text-[11.5px] font-medium
+                transition-all duration-200 whitespace-nowrap
                 focus-visible:ring-2 focus-visible:ring-brand-primary
                 ${i === 0
-                  ? 'bg-content-primary text-surface-primary shadow-sm'
-                  : 'bg-surface-secondary text-content-secondary hover:bg-surface-elevated hover:text-content-primary border border-border'
+                  ? [
+                      'bg-content-primary text-surface-primary',
+                      'shadow-sm',
+                    ].join(' ')
+                  : [
+                      'bg-neutral-900/5 dark:bg-white/5 backdrop-blur-sm',
+                      'border border-neutral-900/10 dark:border-white/10',
+                      'text-content-secondary',
+                      'hover:bg-neutral-900/10 dark:hover:bg-white/10 hover:text-content-primary',
+                      'hover:border-neutral-900/20 dark:hover:border-white/20',
+                    ].join(' ')
                 }
               `}
               aria-pressed={i === 0}

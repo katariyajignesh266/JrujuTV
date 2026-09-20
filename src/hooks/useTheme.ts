@@ -1,21 +1,49 @@
-// src/hooks/useTheme.ts
 'use client';
-
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useUIStore } from '@/store/uiStore';
 
 export function useTheme() {
-  const { theme, toggleTheme, setTheme } = useUIStore();
+  const theme = useUIStore((s) => s.theme);
+  const setThemeStore = useUIStore((s) => s.setTheme);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
+    setMounted(true);
+    const isDarkClass = document.documentElement.classList.contains('dark');
+    if (theme === 'dark' && !isDarkClass) {
+      document.documentElement.classList.add('dark');
+    } else if (theme === 'light' && isDarkClass) {
+      document.documentElement.classList.remove('dark');
     }
   }, [theme]);
 
-  return { theme, toggleTheme, setTheme, isDark: theme === 'dark' };
-}
+  const toggleTheme = useCallback(() => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    if (typeof document !== 'undefined') {
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    setThemeStore(nextTheme);
+  }, [theme, setThemeStore]);
 
+  const setTheme = useCallback(
+    (newTheme: 'light' | 'dark') => {
+      if (typeof document !== 'undefined') {
+        if (newTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+      setThemeStore(newTheme);
+    },
+    [setThemeStore]
+  );
+
+  const isDark = theme === 'dark';
+
+  return { theme, toggleTheme, setTheme, isDark, mounted };
+}

@@ -1,5 +1,4 @@
 // src/store/authStore.ts
-'use client';
 
 import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';

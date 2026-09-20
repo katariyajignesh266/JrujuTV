@@ -1,7 +1,7 @@
 'use client';
 
 import { Search, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { cn } from '@/lib/cn';
 import { useUIStore } from '@/store/uiStore';
 
@@ -18,15 +18,25 @@ export function SearchBar() {
       role="search"
       onSubmit={handleSubmit}
       className={cn(
-        'flex items-center',
+        'flex items-center group',
         'w-full max-w-[600px]',
         'h-10 rounded-full',
-        'bg-surface-secondary border border-border',
-        'focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary/20',
-        'transition-all duration-200 overflow-hidden'
+        // Glassmorphic base — adapts to light/dark
+        'bg-black/[0.04] dark:bg-white/5 backdrop-blur-md',
+        'border border-black/[0.08] dark:border-white/10',
+        'shadow-[0_2px_16px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_16px_rgba(0,0,0,0.3)]',
+        // Focus glow
+        'focus-within:border-brand-primary/50 focus-within:bg-black/[0.06] dark:focus-within:bg-white/8',
+        'focus-within:shadow-[0_0_0_3px_rgba(229,57,53,0.12),0_2px_16px_rgba(0,0,0,0.10)]',
+        'transition-all duration-300 overflow-hidden'
       )}
     >
-      <div className="flex flex-1 items-center px-4 gap-2 min-w-0">
+      {/* Search icon left */}
+      <div className="pl-4 shrink-0 text-content-disabled group-focus-within:text-brand-primary transition-colors duration-200">
+        <Search size={15} strokeWidth={2} aria-hidden="true" />
+      </div>
+
+      <div className="flex flex-1 items-center px-3 gap-2 min-w-0">
         <input
           ref={inputRef}
           type="search"
@@ -36,8 +46,9 @@ export function SearchBar() {
           aria-label="Search JruJu TV"
           className={cn(
             'flex-1 bg-transparent text-fluid-sm text-content-primary',
-            'placeholder:text-content-disabled',
-            'outline-none border-none',
+            'placeholder:text-content-disabled/70',
+            'outline-none border-none shadow-none',
+            'focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0',
             'min-w-0'
           )}
         />
@@ -46,24 +57,27 @@ export function SearchBar() {
             type="button"
             aria-label="Clear search query"
             onClick={() => setQuery('')}
-            className="shrink-0 text-content-disabled hover:text-content-primary transition-colors p-1"
+            className="shrink-0 text-content-disabled hover:text-content-primary transition-colors p-0.5 rounded-full hover:bg-white/20"
           >
-            <X size={15} aria-hidden="true" />
+            <X size={14} aria-hidden="true" />
           </button>
         )}
       </div>
 
-      {/* YouTube-style attached search button on right edge of pill */}
+      {/* Glassmorphic search submit button on right */}
       <button
         type="submit"
         aria-label="Submit search"
         className={cn(
-          'flex items-center justify-center px-5 h-full',
-          'bg-surface-elevated/60 hover:bg-surface-elevated border-l border-border',
-          'text-content-secondary hover:text-content-primary transition-colors'
+          'flex items-center justify-center px-4 h-full shrink-0',
+          'bg-black/[0.04] dark:bg-white/5 hover:bg-brand-primary/10',
+          'border-l border-black/[0.08] dark:border-white/10',
+          'text-content-secondary hover:text-brand-primary',
+          'transition-all duration-200',
+          'rounded-r-full'
         )}
       >
-        <Search size={17} strokeWidth={2} aria-hidden="true" />
+        <Search size={16} strokeWidth={2} aria-hidden="true" />
       </button>
     </form>
   );
@@ -74,6 +88,18 @@ export function MobileSearchOverlay() {
   const { searchOpen, closeSearch } = useUIStore();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSearch();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [searchOpen, closeSearch]);
 
   if (!searchOpen) return null;
 
@@ -115,7 +141,12 @@ export function MobileSearchOverlay() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search JruJu TV..."
             aria-label="Search"
-            className="flex-1 bg-transparent text-fluid-sm text-content-primary placeholder:text-content-disabled outline-none"
+            className={cn(
+              'flex-1 bg-transparent text-fluid-sm text-content-primary',
+              'placeholder:text-content-disabled',
+              'outline-none border-none shadow-none',
+              'focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0'
+            )}
           />
           {query && (
             <button
