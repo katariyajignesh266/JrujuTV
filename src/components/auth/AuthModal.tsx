@@ -351,9 +351,9 @@ function ParentLoginForm({
               type="button"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               onClick={() => setShowPassword(!showPassword)}
-              className="text-content-disabled hover:text-content-secondary p-1"
+              className="text-content-disabled hover:text-content-secondary w-10 h-10 -mr-2 flex items-center justify-center rounded-lg transition-colors focus-visible:ring-1 focus-visible:ring-brand-primary"
             >
-              {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+              {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
           }
         />
@@ -443,9 +443,9 @@ function ChildLoginForm({
               type="button"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               onClick={() => setShowPassword(!showPassword)}
-              className="text-content-disabled hover:text-content-secondary p-1"
+              className="text-content-disabled hover:text-content-secondary w-10 h-10 -mr-2 flex items-center justify-center rounded-lg transition-colors focus-visible:ring-1 focus-visible:ring-brand-tertiary"
             >
-              {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+              {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
           }
         />

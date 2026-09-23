@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { PWAProvider } from '@/components/providers/PWAProvider';
 import { DesktopHeader } from '@/components/layout/DesktopHeader';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavBar } from '@/components/layout/BottomNavBar';
@@ -11,12 +12,31 @@ import { AuthModal } from '@/components/auth/AuthModal';
 export const metadata: Metadata = {
   title: 'JruJu TV — Kids\' Content Platform',
   description: 'Curated, parent-controlled video platform for children\'s content',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'JruJu TV',
+  },
+  icons: {
+    icon: [
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icons/apple-touch-icon.png', sizes: '180x180' },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // theme-color drives the browser chrome / Android status bar color
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#E53935' },
+    { media: '(prefers-color-scheme: dark)',  color: '#E53935' },
+  ],
 };
 
 export default function RootLayout({
@@ -46,6 +66,9 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>
+          {/* PWA: SW registration + install prompt capture (client-only, renders nothing) */}
+          <PWAProvider />
+
           {/* Skip to main content (a11y) */}
           <a
             href="#main-content"

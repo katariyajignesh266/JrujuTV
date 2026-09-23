@@ -34,7 +34,7 @@ export function IconButton({
       type="button"
       aria-label={label}
       className={cn(
-        'relative inline-flex items-center justify-center rounded-full',
+        'group relative inline-flex items-center justify-center rounded-full',
         'min-touch transition-theme',
         btnSizes[size],
         variant === 'ghost' && [
@@ -55,15 +55,17 @@ export function IconButton({
       )}
       {...props}
     >
-      <Icon size={iconSizes[size]} strokeWidth={1.75} className={iconClassName} aria-hidden="true" />
-      {badge !== undefined && badge > 0 && (
-        <span
-          aria-label={`${badge} notifications`}
-          className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-primary text-white text-[9px] font-bold leading-none"
-        >
-          {badge > 9 ? '9+' : badge}
-        </span>
-      )}
+      <span className="relative inline-flex items-center justify-center">
+        <Icon size={iconSizes[size]} strokeWidth={1.75} className={iconClassName} aria-hidden="true" />
+        {badge !== undefined && badge > 0 && (
+          <span
+            aria-label={`${badge} notifications`}
+            className="absolute -top-1 -right-1.5 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-brand-primary text-white text-[10px] font-bold leading-none ring-2 ring-surface-primary group-hover:ring-surface-secondary shadow-sm shadow-brand-primary/30 pointer-events-none select-none transition-colors"
+          >
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
+      </span>
     </button>
   );
 }

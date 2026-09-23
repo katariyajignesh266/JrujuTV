@@ -1,14 +1,17 @@
-// src/hooks/useClickOutside.ts
 'use client';
 
 import { useEffect, useRef, RefObject } from 'react';
 
+/**
+ * Calls handler when user clicks/taps outside of ref.
+ * Uses a single pointerdown listener in bubble phase.
+ * Strictly ignores hidden/inactive responsive headers.
+ */
 export function useClickOutside<T extends HTMLElement>(
   ref: RefObject<T | null>,
   handler: () => void,
   enabled = true
 ) {
-  // Store handler in a ref so we don't need to re-register listeners on every render
   const handlerRef = useRef(handler);
   useEffect(() => {
     handlerRef.current = handler;
@@ -17,19 +20,20 @@ export function useClickOutside<T extends HTMLElement>(
   useEffect(() => {
     if (!enabled) return;
 
-    const listener = (e: MouseEvent | TouchEvent) => {
+    const listener = (e: PointerEvent) => {
       if (!ref.current) return;
-      // If click is inside the ref element (includes the trigger button), ignore
+      // If this element or any parent is hidden (e.g. inactive responsive header), ignore!
+      if (ref.current.offsetWidth === 0 && ref.current.offsetHeight === 0 && !ref.current.getClientRects().length) {
+        return;
+      }
       if (ref.current.contains(e.target as Node)) return;
       handlerRef.current();
     };
 
-    // Use 'click' instead of 'mousedown' so button onClick fires first
-    document.addEventListener('click', listener, true);
-    document.addEventListener('touchend', listener, true);
+    document.addEventListener('pointerdown', listener);
+
     return () => {
-      document.removeEventListener('click', listener, true);
-      document.removeEventListener('touchend', listener, true);
+      document.removeEventListener('pointerdown', listener);
     };
   }, [ref, enabled]);
 }

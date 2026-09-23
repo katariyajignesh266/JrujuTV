@@ -37,8 +37,9 @@ export function BottomNavBar() {
             ? pathname === '/'
             : pathname.startsWith(item.href);
 
-          const handleClick = () => {
+          const handleClick = (e: React.MouseEvent) => {
             if (isProfile && role === 'guest') {
+              e.preventDefault();
               openAuthModal();
               return;
             }

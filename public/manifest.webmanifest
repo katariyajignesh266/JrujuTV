@@ -1,0 +1,51 @@
+{
+  "name": "JaruJu TV — Kids' Content Platform",
+  "short_name": "JaruJu TV",
+  "name": "JruJu TV — Kids' Content Platform",
+  "short_name": "JruJu TV",
+  "description": "Curated, parent-controlled video platform for children's content",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#E53935",
+  "background_color": "#FFFFFF",
+  "lang": "en",
+  "categories": ["entertainment", "kids"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Watch Videos",
+      "short_name": "Videos",
+      "description": "Browse all videos",
+      "url": "/videos"
+    },
+    {
+      "name": "Browse Channels",
+      "short_name": "Channels",
+      "description": "Browse all channels",
+      "url": "/channels"
+    }
+  ]
+}
+
