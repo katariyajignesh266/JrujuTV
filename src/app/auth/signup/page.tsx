@@ -88,7 +88,7 @@ export default function SignupPage() {
     setOtp(newOtp);
     if (pasted.length === 6) {
       otpInputRefs.current[5]?.focus();
-      verifyOtp(email, pasted, fullName, 'signup').then(() => {
+      verifyOtp(email, pasted, fullName).then(() => {
         const { session } = useAuthStore.getState();
         if (session) router.push('/');
       });
@@ -110,7 +110,7 @@ export default function SignupPage() {
     e.preventDefault();
     const token = otp.join('');
     if (token.length === 6) {
-      await verifyOtp(email, token, fullName, 'signup');
+      await verifyOtp(email, token, fullName);
       const { session } = useAuthStore.getState();
       if (session) router.push('/');
     }

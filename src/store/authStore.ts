@@ -17,11 +17,11 @@ interface AuthState {
 
   // Actions
   sendOtp: (email: string, shouldCreateUser: boolean, fullName?: string) => Promise<void>;
-  verifyOtp: (email: string, token: string, fullName?: string, otpType?: 'email' | 'signup') => Promise<void>;
+  verifyOtp: (email: string, token: string, fullName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   childLogin: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  initialize: () => (() => void) | void;
+  initialize: () => void;
   clearError: () => void;
   resetOtp: () => void;
 }
@@ -102,38 +102,18 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       }
     },
 
-    verifyOtp: async (email: string, token: string, fullName?: string, otpType: 'email' | 'signup' = 'email') => {
+    verifyOtp: async (email: string, token: string, fullName?: string) => {
       set({ loading: true, error: null });
       try {
-        const cleanToken = token.trim();
-        // 1. Try with the primary type
-        let response = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
           email,
-          token: cleanToken,
-          type: otpType,
+          token,
+          type: 'email',
         });
 
-        // 2. If it failed due to token invalid/expired, try the alternate type ('signup' <-> 'email')
-        if (response.error && (
-          response.error.message.toLowerCase().includes('expired') ||
-          response.error.message.toLowerCase().includes('invalid') ||
-          response.error.status === 403 ||
-          response.error.status === 400
-        )) {
-          const alternateType: 'email' | 'signup' = otpType === 'email' ? 'signup' : 'email';
-          const retryResponse = await supabase.auth.verifyOtp({
-            email,
-            token: cleanToken,
-            type: alternateType,
-          });
-          if (!retryResponse.error && retryResponse.data?.session) {
-            response = retryResponse;
-          }
-        }
+        if (error) throw error;
 
-        if (response.error) throw response.error;
-
-        const session = response.data.session;
+        const session = data.session;
         if (session) {
           // Upsert profile for parent
           const name = fullName || session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
@@ -153,11 +133,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
           });
         }
       } catch (err) {
-        const rawMessage = err instanceof Error ? err.message : '';
-        let message = 'Invalid or expired code. Please check for the latest email or click "Resend code".';
-        if (rawMessage.toLowerCase().includes('rate limit')) {
-          message = 'Too many attempts. Please wait a minute and try again.';
-        }
+        const message = err instanceof Error ? err.message : 'Invalid verification code';
         set({ loading: false, error: message });
       }
     },

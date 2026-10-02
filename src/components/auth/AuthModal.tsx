@@ -521,12 +521,10 @@ function OtpVerifyForm({
       inputRefs.current[index + 1]?.focus();
     }
 
-    const isSignup = !!signupName;
-
     if (value && index === 5) {
       const fullOtp = newOtp.join('');
       if (fullOtp.length === 6 && otpEmail) {
-        verifyOtp(otpEmail, fullOtp, signupName, isSignup ? 'signup' : 'email').then(() => {
+        verifyOtp(otpEmail, fullOtp, signupName).then(() => {
           const { session } = useAuthStore.getState();
           if (session) onClose();
         });
@@ -548,10 +546,9 @@ function OtpVerifyForm({
       newOtp[i] = pasted[i];
     }
     setOtp(newOtp);
-    const isSignup = !!signupName;
     if (pasted.length === 6 && otpEmail) {
       inputRefs.current[5]?.focus();
-      verifyOtp(otpEmail, pasted, signupName, isSignup ? 'signup' : 'email').then(() => {
+      verifyOtp(otpEmail, pasted, signupName).then(() => {
         const { session } = useAuthStore.getState();
         if (session) onClose();
       });
@@ -563,8 +560,7 @@ function OtpVerifyForm({
   const handleResend = async () => {
     if (countdown > 0 || !otpEmail) return;
     clearError();
-    const isSignup = !!signupName;
-    await sendOtp(otpEmail, isSignup, signupName);
+    await sendOtp(otpEmail, true, signupName);
     setCountdown(60);
     setOtp(['', '', '', '', '', '']);
     inputRefs.current[0]?.focus();
@@ -574,8 +570,7 @@ function OtpVerifyForm({
     e.preventDefault();
     const fullOtp = otp.join('');
     if (fullOtp.length === 6 && otpEmail) {
-      const isSignup = !!signupName;
-      await verifyOtp(otpEmail, fullOtp, signupName, isSignup ? 'signup' : 'email');
+      await verifyOtp(otpEmail, fullOtp, signupName);
       const { session } = useAuthStore.getState();
       if (session) onClose();
     }
@@ -616,7 +611,7 @@ function OtpVerifyForm({
         <ErrorMessage message={error} />
 
         <SubmitButton
-          label={signupName ? 'Create Account & Continue' : 'Verify & Log In'}
+          label="Verify"
           isLoading={loading}
         />
 
