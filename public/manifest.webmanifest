@@ -1,6 +1,4 @@
 {
-  "name": "JaruJu TV — Kids' Content Platform",
-  "short_name": "JaruJu TV",
   "name": "JruJu TV — Kids' Content Platform",
   "short_name": "JruJu TV",
   "description": "Curated, parent-controlled video platform for children's content",
@@ -12,6 +10,10 @@
   "background_color": "#FFFFFF",
   "lang": "en",
   "categories": ["entertainment", "kids"],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "handle_links": "preferred",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
