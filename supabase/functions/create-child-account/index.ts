@@ -31,7 +31,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    const supabaseServiceKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: req.headers.get('Authorization')! } },
@@ -112,6 +112,14 @@ serve(async (req) => {
 
     const newUserId = authData.user.id
 
+    // Ensure parent profile exists in public.profiles (to satisfy foreign key constraint)
+    const parentName = parentUser.user_metadata?.full_name || parentUser.user_metadata?.name || parentUser.email?.split('@')[0] || 'Parent'
+    await adminClient.from('profiles').upsert({
+      id: parentUser.id,
+      full_name: parentName,
+      email: parentUser.email ?? '',
+    }, { onConflict: 'id' })
+
     const { error: insertError } = await adminClient
       .from('children')
       .insert({
@@ -123,7 +131,7 @@ serve(async (req) => {
 
     if (insertError) {
       await adminClient.auth.admin.deleteUser(newUserId)
-      return new Response(JSON.stringify({ error: 'Failed to create child profile' }), {
+      return new Response(JSON.stringify({ error: insertError.message || 'Failed to create child profile' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
