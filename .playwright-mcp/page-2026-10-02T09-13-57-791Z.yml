@@ -1,0 +1,33 @@
+- generic [active] [ref=f3e1]:
+  - link "Skip to main content" [ref=f3e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f3e3]:
+    - link "JruJu TV home" [ref=f3e4] [cursor=pointer]:
+      - /url: /
+      - generic "JruJu TV" [ref=f3e5]
+    - generic [ref=f3e11]:
+      - button "Open search" [ref=f3e12] [cursor=pointer]
+      - button "Notifications" [ref=f3e18] [cursor=pointer]
+      - button "Switch to dark mode" [ref=f3e23] [cursor=pointer]
+  - main [ref=f3e27]:
+    - generic [ref=f3e34]:
+      - heading "You" [level=1] [ref=f3e35]
+      - paragraph [ref=f3e36]: Sign in to manage your JruJu TV experience
+      - button "Sign In" [ref=f3e37] [cursor=pointer]
+  - navigation "Mobile navigation" [ref=f3e42]:
+    - list [ref=f3e43]:
+      - listitem [ref=f3e44]:
+        - link "Home" [ref=f3e45] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=f3e51]:
+        - link "Shorts" [ref=f3e52] [cursor=pointer]:
+          - /url: /shorts
+      - listitem [ref=f3e57]:
+        - link "Videos" [ref=f3e58] [cursor=pointer]:
+          - /url: /videos
+      - listitem [ref=f3e64]:
+        - link "Channels" [ref=f3e65] [cursor=pointer]:
+          - /url: /channels
+      - listitem [ref=f3e70]:
+        - link "You" [ref=f3e71] [cursor=pointer]:
+          - /url: "#"

@@ -1,0 +1,82 @@
+- generic [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e324]:
+    - link "JruJu TV home" [ref=e325] [cursor=pointer]:
+      - /url: /
+      - generic "JruJu TV" [ref=e326]
+    - generic [ref=e332]:
+      - button "Open search" [ref=e333] [cursor=pointer]
+      - button "Notifications" [ref=e339] [cursor=pointer]:
+        - generic [ref=e340]:
+          - generic "1 notifications": "1"
+      - button "Switch to dark mode" [ref=e344] [cursor=pointer]
+  - main [ref=e82]:
+    - navigation "Content categories" [ref=e83]:
+      - list [ref=e84]:
+        - listitem [ref=e85]:
+          - button "All" [pressed] [ref=e86] [cursor=pointer]
+        - listitem [ref=e87]:
+          - button "Bhajans" [ref=e88] [cursor=pointer]
+        - listitem [ref=e89]:
+          - button "Stories" [ref=e90] [cursor=pointer]
+        - listitem [ref=e91]:
+          - button "Education" [ref=e92] [cursor=pointer]
+        - listitem [ref=e93]:
+          - button "Cartoons" [ref=e94] [cursor=pointer]
+        - listitem [ref=e95]:
+          - button "Nature" [ref=e96] [cursor=pointer]
+        - listitem [ref=e97]:
+          - button "Festivals" [ref=e98] [cursor=pointer]
+        - listitem [ref=e99]:
+          - button "Yoga" [ref=e100] [cursor=pointer]
+    - region "Videos feed" [ref=e101]:
+      - generic [ref=e102]:
+        - article "Loading video" [ref=e103] [cursor=pointer]
+        - article "Loading video" [ref=e111] [cursor=pointer]
+        - article "Loading video" [ref=e119] [cursor=pointer]
+        - article "Loading video" [ref=e127] [cursor=pointer]
+        - article "Loading video" [ref=e135] [cursor=pointer]
+        - article "Loading video" [ref=e143] [cursor=pointer]
+        - article "Loading video" [ref=e151] [cursor=pointer]
+        - article "Loading video" [ref=e159] [cursor=pointer]
+        - article "Loading video" [ref=e167] [cursor=pointer]
+        - article "Loading video" [ref=e175] [cursor=pointer]
+        - article "Loading video" [ref=e183] [cursor=pointer]
+        - article "Loading video" [ref=e191] [cursor=pointer]
+  - navigation "Mobile navigation" [ref=e348]:
+    - list [ref=e349]:
+      - listitem [ref=e350]:
+        - link "Home" [ref=e351] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=e358]:
+        - link "Shorts" [ref=e359] [cursor=pointer]:
+          - /url: /shorts
+      - listitem [ref=e364]:
+        - link "Videos" [ref=e365] [cursor=pointer]:
+          - /url: /videos
+      - listitem [ref=e371]:
+        - link "Channels" [ref=e372] [cursor=pointer]:
+          - /url: /channels
+      - listitem [ref=e377]:
+        - link "You" [ref=e378] [cursor=pointer]:
+          - /url: "#"
+  - alert [ref=e199]
+  - dialog "Sign in to JruJu TV" [ref=e469]:
+    - generic [ref=e387]:
+      - button "Close dialog" [active] [ref=e389] [cursor=pointer]
+      - generic [ref=e393]:
+        - generic "JruJu TV" [ref=e395]
+        - heading "Welcome to JruJu TV" [level=1] [ref=e470]
+        - paragraph [ref=e471]: Choose how you'd like to continue
+        - generic [ref=e472]:
+          - button "Continue as Parent Sign up or log in · Full parental admin controls ›" [ref=e473] [cursor=pointer]:
+            - generic [ref=e477]:
+              - paragraph [ref=e478]: Continue as Parent
+              - paragraph [ref=e479]: Sign up or log in · Full parental admin controls
+            - generic [ref=e480]: ›
+          - button "Child Login Use the username & PIN your parent set up ›" [ref=e481] [cursor=pointer]:
+            - generic [ref=e486]:
+              - paragraph [ref=e487]: Child Login
+              - paragraph [ref=e488]: Use the username & PIN your parent set up
+            - generic [ref=e489]: ›

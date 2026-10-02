@@ -1,0 +1,88 @@
+- generic [active] [ref=f2e1]:
+  - link "Skip to main content" [ref=f2e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f2e3]:
+    - link "JruJu TV home" [ref=f2e4] [cursor=pointer]:
+      - /url: /
+      - generic "JruJu TV" [ref=f2e5]
+    - generic [ref=f2e11]:
+      - button "Open search" [ref=f2e12] [cursor=pointer]
+      - button "Notifications" [ref=f2e18] [cursor=pointer]
+      - button "Switch to dark mode" [ref=f2e23] [cursor=pointer]
+  - main [ref=f2e27]:
+    - generic [ref=f2e28]:
+      - generic "JruJu TV" [ref=f2e30]
+      - generic [ref=f2e36]:
+        - heading "Download JruJu TV" [level=1] [ref=f2e37]
+        - paragraph [ref=f2e38]: Take safe, curated children's content with you across all your family's favorite devices.
+      - generic [ref=f2e39]:
+        - generic [ref=f2e40]:
+          - heading "Mobile App" [level=2] [ref=f2e44]
+          - paragraph [ref=f2e45]: iOS & Android phones with background audio & safe lock
+          - button "Coming Soon" [disabled] [ref=f2e46]
+        - generic [ref=f2e47]:
+          - heading "Tablet / iPad" [level=2] [ref=f2e51]
+          - paragraph [ref=f2e52]: Designed for little fingers with big buttons and easy navigation
+          - button "Coming Soon" [disabled] [ref=f2e53]
+        - generic [ref=f2e54]:
+          - heading "Install as App" [level=2] [ref=f2e58]
+          - paragraph [ref=f2e59]: Install directly from your browser — works on desktop, TV, and Android.
+          - generic [ref=f2e60]:
+            - paragraph [ref=f2e61]: "Your browser may support installation via its menu:"
+            - generic [ref=f2e62]:
+              - paragraph [ref=f2e66]: "Install from your browser:"
+              - list [ref=f2e67]:
+                - listitem [ref=f2e68]:
+                  - generic [ref=f2e70]:
+                    - strong [ref=f2e71]: "Chrome / Edge (desktop):"
+                    - text: Click the
+                    - strong [ref=f2e72]: ⊕ Install
+                    - text: icon in the address bar, or open the browser menu (⋮) →
+                    - strong [ref=f2e73]: Install JruJu TV
+                - listitem [ref=f2e74]:
+                  - generic [ref=f2e76]:
+                    - strong [ref=f2e77]: "Chrome (Android):"
+                    - text: Tap the browser menu (⋮) →
+                    - strong [ref=f2e78]: Add to Home Screen
+                - listitem [ref=f2e79]:
+                  - generic [ref=f2e81]:
+                    - strong [ref=f2e82]: "Firefox:"
+                    - text: Tap the menu (≡) →
+                    - strong [ref=f2e83]: Install
+                    - text: or
+                    - strong [ref=f2e84]: Add to Home Screen
+                - listitem [ref=f2e85]:
+                  - generic [ref=f2e87]:
+                    - strong [ref=f2e88]: "Samsung Internet:"
+                    - text: Tap the menu →
+                    - strong [ref=f2e89]: Add page to
+                    - text: →
+                    - strong [ref=f2e90]: Home screen
+              - paragraph [ref=f2e91]:
+                - text: "Tip: Use"
+                - strong [ref=f2e92]: Chrome
+                - text: or
+                - strong [ref=f2e93]: Edge
+                - text: for the smoothest install experience.
+      - generic [ref=f2e94]:
+        - generic [ref=f2e95]: 100% ad-free viewing experience for children
+        - generic [ref=f2e100]: Parent-controlled channel allowlists sync automatically
+        - generic [ref=f2e105]: Instant dark & light modes matching ambient lighting
+        - generic [ref=f2e110]: Works offline — UI shell loads even without a connection
+  - navigation "Mobile navigation" [ref=f2e115]:
+    - list [ref=f2e116]:
+      - listitem [ref=f2e117]:
+        - link "Home" [ref=f2e118] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=f2e124]:
+        - link "Shorts" [ref=f2e125] [cursor=pointer]:
+          - /url: /shorts
+      - listitem [ref=f2e130]:
+        - link "Videos" [ref=f2e131] [cursor=pointer]:
+          - /url: /videos
+      - listitem [ref=f2e137]:
+        - link "Channels" [ref=f2e138] [cursor=pointer]:
+          - /url: /channels
+      - listitem [ref=f2e143]:
+        - link "You" [ref=f2e144] [cursor=pointer]:
+          - /url: "#"

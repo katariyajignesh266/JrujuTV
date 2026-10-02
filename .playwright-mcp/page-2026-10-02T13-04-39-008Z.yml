@@ -1,0 +1,94 @@
+- generic [ref=f1e1]:
+  - link "Skip to main content" [ref=f1e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - button "Open sidebar" [ref=f1e5] [cursor=pointer]
+      - link "JruJu TV home" [ref=f1e8] [cursor=pointer]:
+        - /url: /
+        - generic "JruJu TV" [ref=f1e9]
+    - search [ref=f1e16]:
+      - searchbox "Search JruJu TV" [ref=f1e22]
+      - button "Submit search" [ref=f1e23] [cursor=pointer]
+    - generic [ref=f1e27]:
+      - button "Notifications" [ref=f1e29] [cursor=pointer]:
+        - generic [ref=f1e30]:
+          - generic "1 notifications": "1"
+      - button "Switch to dark mode" [ref=f1e34] [cursor=pointer]
+      - button "Sign in or create account" [ref=f1e38] [cursor=pointer]:
+        - generic [ref=f1e43]: Sign In
+  - complementary "Site navigation" [ref=f1e44]:
+    - navigation "Primary navigation" [ref=f1e45]:
+      - list [ref=f1e46]:
+        - listitem [ref=f1e47]:
+          - link "Home" [ref=f1e48] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=f1e52]:
+          - link "Shorts" [ref=f1e53] [cursor=pointer]:
+            - /url: /shorts
+        - listitem [ref=f1e56]:
+          - link "Videos" [ref=f1e57] [cursor=pointer]:
+            - /url: /videos
+        - listitem [ref=f1e61]:
+          - link "Channels" [ref=f1e62] [cursor=pointer]:
+            - /url: /channels
+        - listitem [ref=f1e65]:
+          - link "My Bhakti Journey" [ref=f1e66] [cursor=pointer]:
+            - /url: /bhakti
+    - generic [ref=f1e69]:
+      - link "Settings" [ref=f1e71] [cursor=pointer]:
+        - /url: /settings
+      - link "Download App" [ref=f1e77] [cursor=pointer]:
+        - /url: /download-app
+  - main [ref=f1e82]:
+    - navigation "Content categories" [ref=f1e83]:
+      - list [ref=f1e84]:
+        - listitem [ref=f1e85]:
+          - button "All" [pressed] [ref=f1e86] [cursor=pointer]
+        - listitem [ref=f1e87]:
+          - button "Bhajans" [ref=f1e88] [cursor=pointer]
+        - listitem [ref=f1e89]:
+          - button "Stories" [ref=f1e90] [cursor=pointer]
+        - listitem [ref=f1e91]:
+          - button "Education" [ref=f1e92] [cursor=pointer]
+        - listitem [ref=f1e93]:
+          - button "Cartoons" [ref=f1e94] [cursor=pointer]
+        - listitem [ref=f1e95]:
+          - button "Nature" [ref=f1e96] [cursor=pointer]
+        - listitem [ref=f1e97]:
+          - button "Festivals" [ref=f1e98] [cursor=pointer]
+        - listitem [ref=f1e99]:
+          - button "Yoga" [ref=f1e100] [cursor=pointer]
+    - region "Videos feed" [ref=f1e101]:
+      - generic [ref=f1e102]:
+        - article "Loading video" [ref=f1e103] [cursor=pointer]
+        - article "Loading video" [ref=f1e111] [cursor=pointer]
+        - article "Loading video" [ref=f1e119] [cursor=pointer]
+        - article "Loading video" [ref=f1e127] [cursor=pointer]
+        - article "Loading video" [ref=f1e135] [cursor=pointer]
+        - article "Loading video" [ref=f1e143] [cursor=pointer]
+        - article "Loading video" [ref=f1e151] [cursor=pointer]
+        - article "Loading video" [ref=f1e159] [cursor=pointer]
+        - article "Loading video" [ref=f1e167] [cursor=pointer]
+        - article "Loading video" [ref=f1e175] [cursor=pointer]
+        - article "Loading video" [ref=f1e183] [cursor=pointer]
+        - article "Loading video" [ref=f1e191] [cursor=pointer]
+  - alert [ref=f1e199]
+  - dialog "Sign in to JruJu TV" [ref=f1e200]:
+    - generic [ref=f1e202]:
+      - button "Close dialog" [active] [ref=f1e204] [cursor=pointer]
+      - generic [ref=f1e208]:
+        - generic "JruJu TV" [ref=f1e210]
+        - heading "Welcome to JruJu TV" [level=1] [ref=f1e216]
+        - paragraph [ref=f1e217]: Choose how you'd like to continue
+        - generic [ref=f1e218]:
+          - button "Continue as Parent Sign up or log in · Full parental admin controls ›" [ref=f1e219] [cursor=pointer]:
+            - generic [ref=f1e223]:
+              - paragraph [ref=f1e224]: Continue as Parent
+              - paragraph [ref=f1e225]: Sign up or log in · Full parental admin controls
+            - generic [ref=f1e226]: ›
+          - button "Child Login Use the username & PIN your parent set up ›" [ref=f1e227] [cursor=pointer]:
+            - generic [ref=f1e232]:
+              - paragraph [ref=f1e233]: Child Login
+              - paragraph [ref=f1e234]: Use the username & PIN your parent set up
+            - generic [ref=f1e235]: ›

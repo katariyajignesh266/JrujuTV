@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
-import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PWAProvider } from '@/components/providers/PWAProvider';
 import { DesktopHeader } from '@/components/layout/DesktopHeader';
 import { MobileHeader } from '@/components/layout/MobileHeader';
@@ -33,6 +32,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // theme-color drives the browser chrome / Android status bar color
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#E53935' },
     { media: '(prefers-color-scheme: dark)',  color: '#E53935' },
@@ -66,37 +66,35 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>
-          <AuthProvider>
-            {/* PWA: SW registration + install prompt capture (client-only, renders nothing) */}
-            <PWAProvider />
+          {/* PWA: SW registration + install prompt capture (client-only, renders nothing) */}
+          <PWAProvider />
 
-            {/* Skip to main content (a11y) */}
-            <a
-              href="#main-content"
-              className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-brand-primary focus:text-white focus:font-medium"
-            >
-              Skip to main content
-            </a>
+          {/* Skip to main content (a11y) */}
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-brand-primary focus:text-white focus:font-medium"
+          >
+            Skip to main content
+          </a>
 
-            {/* Headers (each self-hides at wrong breakpoint) */}
-            <MobileHeader />
-            <DesktopHeader />
+          {/* Headers (each self-hides at wrong breakpoint) */}
+          <MobileHeader />
+          <DesktopHeader />
 
-            {/* Sidebar (desktop only) */}
-            <SidebarDrawer />
+          {/* Sidebar (desktop only) */}
+          <SidebarDrawer />
 
-            {/* Reset scroll on route change */}
-            <ScrollToTop />
+          {/* Reset scroll on route change */}
+          <ScrollToTop />
 
-            {/* Page content */}
-            {children}
+          {/* Page content */}
+          {children}
 
-            {/* Mobile bottom nav */}
-            <BottomNavBar />
+          {/* Mobile bottom nav */}
+          <BottomNavBar />
 
-            {/* Auth modal (global) */}
-            <AuthModal />
-          </AuthProvider>
+          {/* Auth modal (global) */}
+          <AuthModal />
         </ThemeProvider>
       </body>
     </html>

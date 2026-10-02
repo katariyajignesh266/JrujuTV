@@ -9,9 +9,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = initialize();
     return () => {
-      if (typeof unsubscribe === 'function') {
-        (unsubscribe as () => void)();
-      }
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, [initialize]);
 

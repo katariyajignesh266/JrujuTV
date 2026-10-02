@@ -1,0 +1,88 @@
+- generic [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e324]:
+    - link "JruJu TV home" [ref=e325] [cursor=pointer]:
+      - /url: /
+      - generic "JruJu TV" [ref=e326]
+    - generic [ref=e332]:
+      - button "Open search" [ref=e333] [cursor=pointer]
+      - button "Notifications" [ref=e339] [cursor=pointer]:
+        - generic [ref=e340]:
+          - generic "1 notifications": "1"
+      - button "Switch to dark mode" [ref=e344] [cursor=pointer]
+  - main [ref=e82]:
+    - navigation "Content categories" [ref=e83]:
+      - list [ref=e84]:
+        - listitem [ref=e85]:
+          - button "All" [pressed] [ref=e86] [cursor=pointer]
+        - listitem [ref=e87]:
+          - button "Bhajans" [ref=e88] [cursor=pointer]
+        - listitem [ref=e89]:
+          - button "Stories" [ref=e90] [cursor=pointer]
+        - listitem [ref=e91]:
+          - button "Education" [ref=e92] [cursor=pointer]
+        - listitem [ref=e93]:
+          - button "Cartoons" [ref=e94] [cursor=pointer]
+        - listitem [ref=e95]:
+          - button "Nature" [ref=e96] [cursor=pointer]
+        - listitem [ref=e97]:
+          - button "Festivals" [ref=e98] [cursor=pointer]
+        - listitem [ref=e99]:
+          - button "Yoga" [ref=e100] [cursor=pointer]
+    - region "Videos feed" [ref=e101]:
+      - generic [ref=e102]:
+        - article "Loading video" [ref=e103] [cursor=pointer]
+        - article "Loading video" [ref=e111] [cursor=pointer]
+        - article "Loading video" [ref=e119] [cursor=pointer]
+        - article "Loading video" [ref=e127] [cursor=pointer]
+        - article "Loading video" [ref=e135] [cursor=pointer]
+        - article "Loading video" [ref=e143] [cursor=pointer]
+        - article "Loading video" [ref=e151] [cursor=pointer]
+        - article "Loading video" [ref=e159] [cursor=pointer]
+        - article "Loading video" [ref=e167] [cursor=pointer]
+        - article "Loading video" [ref=e175] [cursor=pointer]
+        - article "Loading video" [ref=e183] [cursor=pointer]
+        - article "Loading video" [ref=e191] [cursor=pointer]
+  - navigation "Mobile navigation" [ref=e348]:
+    - list [ref=e349]:
+      - listitem [ref=e350]:
+        - link "Home" [ref=e351] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=e358]:
+        - link "Shorts" [ref=e359] [cursor=pointer]:
+          - /url: /shorts
+      - listitem [ref=e364]:
+        - link "Videos" [ref=e365] [cursor=pointer]:
+          - /url: /videos
+      - listitem [ref=e371]:
+        - link "Channels" [ref=e372] [cursor=pointer]:
+          - /url: /channels
+      - listitem [ref=e377]:
+        - link "You" [ref=e378] [cursor=pointer]:
+          - /url: "#"
+  - alert [ref=e199]
+  - dialog [ref=e421]:
+    - generic [ref=e387]:
+      - generic [ref=e388]:
+        - button "Go back" [active] [ref=e422] [cursor=pointer]
+        - button "Close dialog" [ref=e389] [cursor=pointer]
+      - generic [ref=e393]:
+        - generic "JruJu TV" [ref=e395]
+        - heading "Create Parent Account" [level=2] [ref=e445]
+        - paragraph [ref=e446]: Set up your family's safe viewing controls
+        - generic [ref=e447]:
+          - generic [ref=e448]:
+            - generic [ref=e449]: Full Name
+            - textbox "Full Name" [ref=e451]:
+              - /placeholder: Your name
+          - generic [ref=e452]:
+            - generic [ref=e453]: Email Address
+            - textbox "Email Address" [ref=e455]:
+              - /placeholder: parent@example.com
+          - button "Create Account & Continue" [ref=e456] [cursor=pointer]
+        - generic [ref=e457]: or
+        - button "Continue with Google" [ref=e461] [cursor=pointer]
+        - paragraph [ref=e467]:
+          - text: Already have an account?
+          - button "Log In" [ref=e468] [cursor=pointer]

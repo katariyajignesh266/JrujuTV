@@ -1,0 +1,2 @@
+[     706ms] [LOG] [PWA] Service worker registered, scope: http://localhost:3000/ @ http://localhost:3000/_next/static/chunks/app/layout-9f2dceedcdb890ae.js:0
+[   50126ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://your-project-ref.supabase.co/auth/v1/otp:0

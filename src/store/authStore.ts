@@ -21,7 +21,7 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   childLogin: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  initialize: () => (() => void);
+  initialize: () => void;
   clearError: () => void;
   resetOtp: () => void;
 }
@@ -247,7 +247,3 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
   };
 });
-
-if (typeof window !== 'undefined') {
-  (window as unknown as { __authStore?: typeof useAuthStore }).__authStore = useAuthStore;
-}

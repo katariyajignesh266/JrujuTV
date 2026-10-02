@@ -1,0 +1,2 @@
+[     535ms] [LOG] [PWA] Service worker registered, scope: http://localhost:3000/ @ http://localhost:3000/_next/static/chunks/app/layout-3b705da305cc11c5.js:0
+[     535ms] [INFO] Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner. @ http://localhost:3000/:0

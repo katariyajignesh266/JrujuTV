@@ -1,0 +1,4 @@
+[     431ms] [INFO] Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner. @ http://localhost:3000/:0
+[   38144ms] [LOG] [PWA] Service worker registered, scope: http://localhost:3000/ @ http://localhost:3000/_next/static/chunks/app/layout-297de04eecd01bc3.js:0
+[   65700ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://your-project-ref.supabase.co/auth/v1/verify:0
+[   72447ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://your-project-ref.supabase.co/auth/v1/verify:0
