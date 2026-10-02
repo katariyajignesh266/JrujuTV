@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';
 import { createClient } from '@/lib/supabase/client';
 import type { Session, AuthError } from '@supabase/supabase-js';
+import { getPendingOtpSession, clearPendingOtpSession } from '@/lib/auth/otpSession';
 
 interface AuthState {
   role: Role;
@@ -73,7 +74,10 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     initialized: false,
 
     clearError: () => set({ error: null }),
-    resetOtp: () => set({ otpSent: false, otpEmail: null }),
+    resetOtp: () => {
+      clearPendingOtpSession();
+      set({ otpSent: false, otpEmail: null });
+    },
 
     sendOtp: async (email: string, shouldCreateUser: boolean, fullName?: string) => {
       set({ loading: true, error: null });
@@ -123,6 +127,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
             email: session.user.email!,
           }, { onConflict: 'id' });
 
+          clearPendingOtpSession();
           set({
             session,
             role: extractRole(session),
@@ -193,6 +198,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     logout: async () => {
+      clearPendingOtpSession();
       set({ loading: true });
       await supabase.auth.signOut();
       set({
@@ -229,12 +235,15 @@ export const useAuthStore = create<AuthState>()((set, get) => {
             }
           }
         }
+        const pending = getPendingOtpSession();
         set({
           session,
           role: extractRole(session),
           user: extractUser(session),
           initialized: true,
           loading: false,
+          otpSent: !session && !!pending,
+          otpEmail: !session && pending ? pending.email : null,
         });
       });
 

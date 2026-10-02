@@ -54,8 +54,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ available: !data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error?.message || 'Internal Server Error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
