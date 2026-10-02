@@ -27,13 +27,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
 CREATE TRIGGER set_profiles_updated_at
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS set_children_updated_at ON public.children;
 CREATE TRIGGER set_children_updated_at
 BEFORE UPDATE ON public.children
 FOR EACH ROW
@@ -42,28 +40,14 @@ EXECUTE FUNCTION public.set_updated_at();
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.children ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
 CREATE POLICY "profiles_select_own" ON public.profiles FOR SELECT USING (auth.uid() = id);
-
-DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
 CREATE POLICY "profiles_insert_own" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
-
-DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
-DROP POLICY IF EXISTS "children_select_own_parent" ON public.children;
 CREATE POLICY "children_select_own_parent" ON public.children FOR SELECT USING (auth.uid() = parent_id);
-
-DROP POLICY IF EXISTS "children_select_own_child" ON public.children;
 CREATE POLICY "children_select_own_child" ON public.children FOR SELECT USING (auth.uid() = id);
-
-DROP POLICY IF EXISTS "children_insert_parent" ON public.children;
 CREATE POLICY "children_insert_parent" ON public.children FOR INSERT WITH CHECK (auth.uid() = parent_id);
-
-DROP POLICY IF EXISTS "children_update_parent" ON public.children;
 CREATE POLICY "children_update_parent" ON public.children FOR UPDATE USING (auth.uid() = parent_id);
-
-DROP POLICY IF EXISTS "children_delete_parent" ON public.children;
 CREATE POLICY "children_delete_parent" ON public.children FOR DELETE USING (auth.uid() = parent_id);
 
 CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb) RETURNS jsonb

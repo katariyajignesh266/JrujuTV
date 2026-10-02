@@ -21,7 +21,7 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   childLogin: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  initialize: () => void;
+  initialize: () => (() => void);
   clearError: () => void;
   resetOtp: () => void;
 }
@@ -207,7 +207,13 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     initialize: () => {
-      // Get initial session
+      // Mark as loading immediately so UI doesn't flash "guest" state
+      // before we finish reading the persisted session from localStorage.
+      set({ loading: true });
+
+      // 1. Read the existing session from localStorage (persisted by @supabase/ssr).
+      //    This is what keeps the user "logged in" across page refreshes and
+      //    dev-server restarts — the access/refresh tokens live in localStorage.
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           // Upsert profile for Google sign-in users on first load
@@ -228,22 +234,31 @@ export const useAuthStore = create<AuthState>()((set, get) => {
           role: extractRole(session),
           user: extractUser(session),
           initialized: true,
+          loading: false,
         });
       });
 
-      // Listen for auth changes
+      // 2. Subscribe to auth state changes so the store stays in sync:
+      //    - SIGNED_IN: user just logged in (OTP verified, Google callback, etc.)
+      //    - SIGNED_OUT: user clicked logout
+      //    - TOKEN_REFRESHED: Supabase silently refreshed the access token —
+      //      we must update our store so the new token is used in future requests.
+      //    - USER_UPDATED: user metadata changed
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         (_event, session) => {
           set({
             session,
             role: extractRole(session),
             user: extractUser(session),
+            initialized: true,
+            loading: false,
           });
         }
       );
 
-      // Cleanup is handled by React effect
+      // Return unsubscribe so AuthProvider can clean up on unmount
       return () => subscription.unsubscribe();
     },
   };
 });
+

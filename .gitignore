@@ -34,3 +34,13 @@ yarn-error.log*
 # scratch
 scratch/
 
+# playwright mcp logs
+.playwright-mcp/
+
+# env secrets
+.env
+.env.*
+!.env.example
+
+# editor
+.vscode/

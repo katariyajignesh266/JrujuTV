@@ -10,7 +10,7 @@ import { cn } from '@/lib/cn';
 
 export function ProfileMenu() {
   const router = useRouter();
-  const { role, user, logout } = useAuthStore();
+  const { role, user, logout, initialized } = useAuthStore();
   const { openAuthModal } = useUIStore();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -29,6 +29,18 @@ export function ProfileMenu() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
+
+  // While reading session from localStorage — show a neutral placeholder
+  // so logged-in users don't see "Sign In" button flash briefly
+  if (!initialized) {
+    return (
+      <div
+        className="h-8 w-8 rounded-full bg-surface-secondary animate-pulse"
+        aria-label="Loading profile…"
+        aria-busy="true"
+      />
+    );
+  }
 
   const isGuest = role === 'guest';
 
@@ -177,3 +189,4 @@ function MenuItem({
     </button>
   );
 }
+

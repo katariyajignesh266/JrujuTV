@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import React from 'react';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { PWAProvider } from '@/components/providers/PWAProvider';
+import { AuthProvider } from '@/components/providers/AuthProvider';
 import { DesktopHeader } from '@/components/layout/DesktopHeader';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavBar } from '@/components/layout/BottomNavBar';
@@ -66,37 +68,41 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>
-          {/* PWA: SW registration + install prompt capture (client-only, renders nothing) */}
-          <PWAProvider />
+          {/* Auth: initializes session from localStorage/cookies on every page load */}
+          <AuthProvider>
+            {/* PWA: SW registration + install prompt capture (client-only, renders nothing) */}
+            <PWAProvider />
 
-          {/* Skip to main content (a11y) */}
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-brand-primary focus:text-white focus:font-medium"
-          >
-            Skip to main content
-          </a>
+            {/* Skip to main content (a11y) */}
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-brand-primary focus:text-white focus:font-medium"
+            >
+              Skip to main content
+            </a>
 
-          {/* Headers (each self-hides at wrong breakpoint) */}
-          <MobileHeader />
-          <DesktopHeader />
+            {/* Headers (each self-hides at wrong breakpoint) */}
+            <MobileHeader />
+            <DesktopHeader />
 
-          {/* Sidebar (desktop only) */}
-          <SidebarDrawer />
+            {/* Sidebar (desktop only) */}
+            <SidebarDrawer />
 
-          {/* Reset scroll on route change */}
-          <ScrollToTop />
+            {/* Reset scroll on route change */}
+            <ScrollToTop />
 
-          {/* Page content */}
-          {children}
+            {/* Page content */}
+            {children}
 
-          {/* Mobile bottom nav */}
-          <BottomNavBar />
+            {/* Mobile bottom nav */}
+            <BottomNavBar />
 
-          {/* Auth modal (global) */}
-          <AuthModal />
+            {/* Auth modal (global) */}
+            <AuthModal />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
   );
 }
+
