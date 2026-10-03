@@ -1,4 +1,4 @@
-﻿// src/store/authStore.ts
+// src/store/authStore.ts
 
 import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';
@@ -23,6 +23,7 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   childLogin: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   initialize: () => (() => void);
   clearError: () => void;
   resetOtp: () => void;
@@ -255,6 +256,47 @@ export const useAuthStore = create<AuthState>()((set, get) => {
         otpEmail: null,
         emailConfirmationSent: false,
       });
+    },
+
+    deleteAccount: async () => {
+      const { session } = get();
+      if (!session) throw new Error('Not authenticated');
+
+      set({ loading: true, error: null });
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to delete account');
+        }
+
+        // Sign out locally — the server-side user no longer exists
+        await supabase.auth.signOut();
+        set({
+          role: 'guest',
+          user: null,
+          session: null,
+          loading: false,
+          error: null,
+          otpSent: false,
+          otpEmail: null,
+          emailConfirmationSent: false,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to delete account';
+        set({ loading: false, error: message });
+        throw err;
+      }
     },
 
     initialize: () => {
