@@ -1,119 +1,51 @@
-'use client';
+﻿'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { PageShell } from '@/components/layout/PageShell';
 import { Logo } from '@/components/shared/Logo';
-import { Shield, User, Mail, ChevronLeft } from 'lucide-react';
+import { Shield, User, Mail, MailCheck, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import Link from 'next/link';
 
 export default function SignupPage() {
-  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [showOtpStep, setShowOtpStep] = useState(false);
-  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
-  const [countdown, setCountdown] = useState(60);
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   const {
-    sendOtp,
-    verifyOtp,
+    sendSignupMagicLink,
     signInWithGoogle,
     loading,
     error,
-    otpSent,
+    emailConfirmationSent,
+    otpEmail,
     clearError,
     resetOtp,
   } = useAuthStore();
 
-  useEffect(() => {
-    if (!showOtpStep || countdown <= 0) return;
-    const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
-    return () => clearInterval(timer);
-  }, [showOtpStep, countdown]);
-
-  useEffect(() => {
-    if (otpSent) {
-      setShowOtpStep(true);
-      setCountdown(60);
-      setOtp(['', '', '', '', '', '']);
-      setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
-    }
-  }, [otpSent]);
-
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    clearError();
-    await sendOtp(email, true, fullName);
-  };
-
-  const handleOtpChange = (index: number, val: string) => {
-    if (!/^\d*$/.test(val)) return;
-    const newOtp = [...otp];
-    newOtp[index] = val.slice(-1);
-    setOtp(newOtp);
-    clearError();
-
-    if (val && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-
-    if (val && index === 5) {
-      const token = newOtp.join('');
-      if (token.length === 6) {
-        verifyOtp(email, token, fullName).then(() => {
-          const { session } = useAuthStore.getState();
-          if (session) router.push('/');
-        });
-      }
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    const newOtp = [...otp];
-    for (let i = 0; i < pasted.length; i++) {
-      newOtp[i] = pasted[i];
-    }
-    setOtp(newOtp);
-    if (pasted.length === 6) {
-      otpInputRefs.current[5]?.focus();
-      verifyOtp(email, pasted, fullName).then(() => {
-        const { session } = useAuthStore.getState();
-        if (session) router.push('/');
+  const startCountdown = () => {
+    setResendCountdown(60);
+    const interval = setInterval(() => {
+      setResendCountdown((c) => {
+        if (c <= 1) { clearInterval(interval); return 0; }
+        return c - 1;
       });
-    } else {
-      otpInputRefs.current[Math.min(pasted.length, 5)]?.focus();
-    }
+    }, 1000);
   };
 
-  const handleResendOtp = async () => {
-    if (countdown > 0) return;
-    clearError();
-    await sendOtp(email, true, fullName);
-    setCountdown(60);
-    setOtp(['', '', '', '', '', '']);
-    otpInputRefs.current[0]?.focus();
-  };
-
-  const handleVerifyManual = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = otp.join('');
-    if (token.length === 6) {
-      await verifyOtp(email, token, fullName);
-      const { session } = useAuthStore.getState();
-      if (session) router.push('/');
-    }
+    clearError();
+    await sendSignupMagicLink(email, fullName);
+    startCountdown();
+  };
+
+  const handleResend = async () => {
+    if (resendCountdown > 0) return;
+    clearError();
+    await sendSignupMagicLink(otpEmail || email, fullName);
+    startCountdown();
   };
 
   return (
@@ -133,7 +65,7 @@ export default function SignupPage() {
             </span>
           </div>
 
-          {!showOtpStep ? (
+          {!emailConfirmationSent ? (
             <>
               <h1 className="font-display text-fluid-xl font-bold text-content-primary">
                 Create Parent Account
@@ -142,7 +74,7 @@ export default function SignupPage() {
                 Set up parental admin controls for JruJu TV
               </p>
 
-              <form onSubmit={handleSendOtp} className="space-y-4">
+              <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-fluid-sm font-medium text-content-primary block" htmlFor="signup-name">
                     Full Name
@@ -186,8 +118,8 @@ export default function SignupPage() {
                 </div>
 
                 <div className="p-3 rounded-xl bg-surface-secondary text-[12px] text-content-secondary space-y-1">
-                  <p className="font-medium text-content-primary">Passwordless &amp; Secure:</p>
-                  <p>We use instant email verification codes. No passwords to remember or lose.</p>
+                  <p className="font-medium text-content-primary">Simple &amp; Secure:</p>
+                  <p>We&apos;ll send a confirmation link to your email. Click it to activate your account instantly — no password needed.</p>
                 </div>
 
                 {error && (
@@ -205,7 +137,7 @@ export default function SignupPage() {
                     'focus-visible:ring-2 focus-visible:ring-brand-primary disabled:opacity-60'
                   )}
                 >
-                  {loading ? 'Sending code…' : 'Create Account & Continue'}
+                  {loading ? 'Sending confirmation…' : 'Create Account & Continue'}
                 </button>
 
                 <div className="relative my-4">
@@ -248,50 +180,33 @@ export default function SignupPage() {
               </form>
             </>
           ) : (
-            <form onSubmit={handleVerifyManual} className="space-y-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowOtpStep(false);
-                  clearError();
-                  resetOtp();
-                }}
-                className="text-content-secondary hover:text-content-primary flex items-center gap-1 text-fluid-sm -ml-1 transition-colors"
-              >
-                <ChevronLeft size={18} />
-                Change email
-              </button>
-
-              <div>
-                <h2 className="font-display text-fluid-lg font-bold text-content-primary">
-                  Enter Verification Code
-                </h2>
-                <p className="text-fluid-sm text-content-secondary mt-0.5">
-                  We sent a 6-digit code to{' '}
-                  <span className="font-medium text-content-primary">{email}</span>
-                </p>
+            /* ── EMAIL CONFIRMATION SENT SCREEN ── */
+            <div className="space-y-5 py-2">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="h-16 w-16 rounded-2xl bg-brand-primary/10 text-brand-primary flex items-center justify-center">
+                  <MailCheck size={32} />
+                </div>
+                <div>
+                  <h2 className="font-display text-fluid-lg font-bold text-content-primary">
+                    Check your email!
+                  </h2>
+                  <p className="text-fluid-sm text-content-secondary mt-1">
+                    We sent a confirmation link to
+                  </p>
+                  <p className="font-semibold text-content-primary text-fluid-sm mt-0.5">
+                    {otpEmail || email}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex justify-center gap-2.5 my-2" onPaste={handleOtpPaste}>
-                {otp.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => { otpInputRefs.current[index] = el; }}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                    className={cn(
-                      'w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold rounded-xl',
-                      'bg-surface-secondary border-2',
-                      digit ? 'border-brand-primary' : 'border-border',
-                      'text-content-primary focus:outline-none focus:ring-2 focus:ring-brand-primary'
-                    )}
-                    aria-label={`Digit ${index + 1}`}
-                  />
-                ))}
+              <div className="p-4 rounded-xl bg-surface-secondary border border-border space-y-2 text-fluid-sm text-content-secondary">
+                <p className="font-medium text-content-primary">Next steps:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Open your email inbox</li>
+                  <li>Find the email from <span className="font-medium text-content-primary">JruJuTV</span></li>
+                  <li>Click <span className="font-medium text-content-primary">&quot;Confirm email address&quot;</span></li>
+                  <li>You&apos;ll be logged in automatically!</li>
+                </ol>
               </div>
 
               {error && (
@@ -300,32 +215,30 @@ export default function SignupPage() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className={cn(
-                  'w-full h-11 rounded-xl font-semibold text-fluid-sm text-white bg-brand-primary',
-                  'hover:opacity-90 active:scale-[0.98] transition-all',
-                  'focus-visible:ring-2 focus-visible:ring-brand-primary disabled:opacity-60'
-                )}
-              >
-                {loading ? 'Verifying…' : 'Verify & Complete Signup'}
-              </button>
-
-              <p className="text-center text-fluid-sm text-content-secondary">
-                {countdown > 0 ? (
-                  <>Resend code in <span className="font-medium text-content-primary">{countdown}s</span></>
+              <div className="text-center text-fluid-sm text-content-secondary">
+                {resendCountdown > 0 ? (
+                  <>Resend link in <span className="font-medium text-content-primary">{resendCountdown}s</span></>
                 ) : (
                   <button
                     type="button"
-                    onClick={handleResendOtp}
-                    className="text-brand-primary font-medium hover:underline focus-visible:underline"
+                    onClick={handleResend}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1.5 text-brand-primary font-medium hover:underline disabled:opacity-60"
                   >
-                    Resend code
+                    <RefreshCw size={14} />
+                    Resend confirmation email
                   </button>
                 )}
-              </p>
-            </form>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { resetOtp(); clearError(); }}
+                className="w-full h-10 rounded-xl text-fluid-sm font-medium border border-border text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-all"
+              >
+                Use a different email
+              </button>
+            </div>
           )}
         </div>
       </div>

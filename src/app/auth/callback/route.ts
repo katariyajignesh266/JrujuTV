@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 function getTargetOrigin(request: Request, defaultOrigin: string): string {
@@ -41,7 +41,9 @@ function getTargetOrigin(request: Request, defaultOrigin: string): string {
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  let next = searchParams.get('next') ?? '/profile';
+  let next = searchParams.get('next') ?? '/';
+  // full_name passed from signup magic link redirect URL
+  const fullName = searchParams.get('full_name') ?? '';
 
   // Ensure next path starts with /
   if (!next.startsWith('/')) {
@@ -56,8 +58,13 @@ export async function GET(request: Request) {
     if (!error) {
       if (data?.session?.user) {
         const user = data.session.user;
-        const name = user.user_metadata?.full_name || user.user_metadata?.name || '';
-        if (name && user.email) {
+        // Prefer full_name from signup redirect param, then user metadata
+        const name =
+          fullName ||
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          '';
+        if (user.email) {
           try {
             await supabase.from('profiles').upsert(
               {
@@ -68,14 +75,15 @@ export async function GET(request: Request) {
               { onConflict: 'id' }
             );
           } catch {
-            // Non-critical profile upsert catch
+            // Non-critical profile upsert — continue
           }
         }
       }
+      // User is now authenticated — redirect to the intended page (default: home)
       return NextResponse.redirect(`${targetOrigin}${next}`);
     }
   }
 
-  // Auth error — redirect to profile with auth_error flag
-  return NextResponse.redirect(`${targetOrigin}/profile?auth_error=true`);
+  // Auth error — redirect to login with error flag
+  return NextResponse.redirect(`${targetOrigin}/auth/login?auth_error=true`);
 }

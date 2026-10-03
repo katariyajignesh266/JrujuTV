@@ -1,4 +1,4 @@
-// src/store/authStore.ts
+﻿// src/store/authStore.ts
 
 import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';
@@ -13,10 +13,12 @@ interface AuthState {
   error: string | null;
   otpSent: boolean;
   otpEmail: string | null;
+  emailConfirmationSent: boolean;
   initialized: boolean;
 
   // Actions
   sendOtp: (email: string, shouldCreateUser: boolean, fullName?: string) => Promise<void>;
+  sendSignupMagicLink: (email: string, fullName: string) => Promise<void>;
   verifyOtp: (email: string, token: string, fullName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   childLogin: (username: string, password: string) => Promise<void>;
@@ -70,10 +72,36 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     error: null,
     otpSent: false,
     otpEmail: null,
+    emailConfirmationSent: false,
     initialized: false,
 
     clearError: () => set({ error: null }),
-    resetOtp: () => set({ otpSent: false, otpEmail: null }),
+    resetOtp: () => set({ otpSent: false, otpEmail: null, emailConfirmationSent: false }),
+
+    sendSignupMagicLink: async (email: string, fullName: string) => {
+      set({ loading: true, error: null });
+      try {
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        // Encode fullName in the redirect URL so callback can upsert the profile
+        const redirectTo = `${origin}/auth/callback?next=/&full_name=${encodeURIComponent(fullName)}`;
+
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: true,
+            data: { full_name: fullName },
+            emailRedirectTo: redirectTo,
+          },
+        });
+
+        if (error) throw error;
+
+        set({ loading: false, emailConfirmationSent: true, otpEmail: email });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to send confirmation email';
+        set({ loading: false, error: message });
+      }
+    },
 
     sendOtp: async (email: string, shouldCreateUser: boolean, fullName?: string) => {
       set({ loading: true, error: null });
@@ -225,6 +253,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
         error: null,
         otpSent: false,
         otpEmail: null,
+        emailConfirmationSent: false,
       });
     },
 
