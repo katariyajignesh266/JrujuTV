@@ -1,5 +1,6 @@
 ﻿import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { EmailOtpType } from '@supabase/supabase-js';
 
 function getTargetOrigin(request: Request, defaultOrigin: string): string {
   // If in local development, use local origin
@@ -38,11 +39,38 @@ function getTargetOrigin(request: Request, defaultOrigin: string): string {
   return defaultOrigin;
 }
 
+async function handleProfileUpsert(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: { id: string; email?: string; user_metadata?: { full_name?: string; name?: string } },
+  fullName: string
+) {
+  const name =
+    fullName ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    '';
+  if (name && user.email) {
+    try {
+      await supabase.from('profiles').upsert(
+        {
+          id: user.id,
+          full_name: name,
+          email: user.email,
+        },
+        { onConflict: 'id' }
+      );
+    } catch {
+      // Non-critical profile upsert catch
+    }
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  let next = searchParams.get('next') ?? '/';
-  // full_name passed from signup magic link redirect URL
+  const token_hash = searchParams.get('token_hash');
+  const type = searchParams.get('type') as EmailOtpType | null;
+  let next = searchParams.get('next') ?? '/profile';
   const fullName = searchParams.get('full_name') ?? '';
 
   // Ensure next path starts with /
@@ -51,39 +79,36 @@ export async function GET(request: Request) {
   }
 
   const targetOrigin = getTargetOrigin(request, origin);
+  const supabase = await createClient();
 
+  // 1. If PKCE code is present
   if (code) {
-    const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      if (data?.session?.user) {
-        const user = data.session.user;
-        // Prefer full_name from signup redirect param, then user metadata
-        const name =
-          fullName ||
-          user.user_metadata?.full_name ||
-          user.user_metadata?.name ||
-          '';
-        if (user.email) {
-          try {
-            await supabase.from('profiles').upsert(
-              {
-                id: user.id,
-                full_name: name,
-                email: user.email,
-              },
-              { onConflict: 'id' }
-            );
-          } catch {
-            // Non-critical profile upsert — continue
-          }
-        }
-      }
-      // User is now authenticated — redirect to the intended page (default: home)
+    if (!error && data?.session?.user) {
+      await handleProfileUpsert(supabase, data.session.user, fullName);
       return NextResponse.redirect(`${targetOrigin}${next}`);
     }
   }
 
-  // Auth error — redirect to login with error flag
-  return NextResponse.redirect(`${targetOrigin}/auth/login?auth_error=true`);
+  // 2. If token_hash and type are present (standard Supabase email verification links)
+  if (token_hash && type) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash,
+      type,
+    });
+    if (!error && data?.session?.user) {
+      await handleProfileUpsert(supabase, data.session.user, fullName);
+      return NextResponse.redirect(`${targetOrigin}${next}`);
+    }
+  }
+
+  // 3. Check if session already exists
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    await handleProfileUpsert(supabase, session.user, fullName);
+    return NextResponse.redirect(`${targetOrigin}${next}`);
+  }
+
+  // 4. Default: Redirect directly to /profile (never show the login page after confirmation)
+  return NextResponse.redirect(`${targetOrigin}/profile`);
 }

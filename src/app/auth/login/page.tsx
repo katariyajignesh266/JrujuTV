@@ -36,9 +36,18 @@ function LoginFormContent() {
     loading,
     error,
     otpSent,
+    role,
+    session,
+    initialized,
     clearError,
     resetOtp,
   } = useAuthStore();
+
+  useEffect(() => {
+    if (initialized && (session || role !== 'guest')) {
+      router.replace('/profile');
+    }
+  }, [initialized, session, role, router]);
 
   const handleTabSwitch = (tab: 'parent' | 'child') => {
     setActiveTab(tab);
@@ -126,6 +135,14 @@ function LoginFormContent() {
     await childLogin(childUsername, childPassword);
     if (useAuthStore.getState().session) router.push('/');
   };
+
+  if (session || role !== 'guest') {
+    return (
+      <div className="flex items-center justify-center min-h-[50dvh]">
+        <div className="h-8 w-8 rounded-full border-2 border-brand-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto py-8 px-4">

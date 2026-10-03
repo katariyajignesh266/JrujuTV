@@ -1,4 +1,4 @@
-// src/store/authStore.ts
+﻿// src/store/authStore.ts
 
 import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';
@@ -84,7 +84,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       try {
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         // Encode fullName in the redirect URL so callback can upsert the profile
-        const redirectTo = `${origin}/auth/callback?next=/&full_name=${encodeURIComponent(fullName)}`;
+        const redirectTo = `${origin}/auth/callback?next=/profile&full_name=${encodeURIComponent(fullName)}`;
 
         const { error } = await supabase.auth.signInWithOtp({
           email,
@@ -280,7 +280,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
           throw new Error(result.error || 'Failed to delete account');
         }
 
-        // Sign out locally — the server-side user no longer exists
+        // Sign out locally â€” the server-side user no longer exists
         await supabase.auth.signOut();
         set({
           role: 'guest',
@@ -306,7 +306,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
 
       // 1. Read the existing session from localStorage (persisted by @supabase/ssr).
       //    This is what keeps the user "logged in" across page refreshes and
-      //    dev-server restarts — the access/refresh tokens live in localStorage.
+      //    dev-server restarts â€” the access/refresh tokens live in localStorage.
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           // Upsert profile for Google sign-in users on first load
@@ -334,7 +334,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       // 2. Subscribe to auth state changes so the store stays in sync:
       //    - SIGNED_IN: user just logged in (OTP verified, Google callback, etc.)
       //    - SIGNED_OUT: user clicked logout
-      //    - TOKEN_REFRESHED: Supabase silently refreshed the access token —
+      //    - TOKEN_REFRESHED: Supabase silently refreshed the access token â€”
       //      we must update our store so the new token is used in future requests.
       //    - USER_UPDATED: user metadata changed
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -354,3 +354,4 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
   };
 });
+

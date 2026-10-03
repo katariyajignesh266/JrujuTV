@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { PageShell } from '@/components/layout/PageShell';
 import { Logo } from '@/components/shared/Logo';
@@ -9,6 +10,7 @@ import { cn } from '@/lib/cn';
 import Link from 'next/link';
 
 export default function SignupPage() {
+  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [resendCountdown, setResendCountdown] = useState(0);
@@ -20,9 +22,18 @@ export default function SignupPage() {
     error,
     emailConfirmationSent,
     otpEmail,
+    role,
+    session,
+    initialized,
     clearError,
     resetOtp,
   } = useAuthStore();
+
+  useEffect(() => {
+    if (initialized && (session || role !== 'guest')) {
+      router.replace('/profile');
+    }
+  }, [initialized, session, role, router]);
 
   const startCountdown = () => {
     setResendCountdown(60);
@@ -47,6 +58,14 @@ export default function SignupPage() {
     await sendSignupMagicLink(otpEmail || email, fullName);
     startCountdown();
   };
+
+  if (session || role !== 'guest') {
+    return (
+      <div className="flex items-center justify-center min-h-[50dvh]">
+        <div className="h-8 w-8 rounded-full border-2 border-brand-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <PageShell>
