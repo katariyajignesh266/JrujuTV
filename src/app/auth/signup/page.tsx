@@ -5,16 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { PageShell } from '@/components/layout/PageShell';
 import { Logo } from '@/components/shared/Logo';
-import { Shield, User, Mail, ChevronLeft, ClipboardCheck } from 'lucide-react';
+import { Shield, User, Mail, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import Link from 'next/link';
-import {
-  getPendingOtpSession,
-  savePendingOtpSession,
-  updatePendingOtpDigits,
-  clearPendingOtpSession,
-  calculateOtpCountdown,
-} from '@/lib/auth/otpSession';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -36,74 +29,24 @@ export default function SignupPage() {
     resetOtp,
   } = useAuthStore();
 
-  // Restore OTP session if user switched back to browser
-  useEffect(() => {
-    const session = getPendingOtpSession();
-    if (session && session.flow === 'signup') {
-      setEmail(session.email);
-      if (session.signupName) setFullName(session.signupName);
-      setShowOtpStep(true);
-      if (session.digits && session.digits.some(d => d !== '')) {
-        setOtp(session.digits);
-      }
-      setCountdown(calculateOtpCountdown(session.sentAt));
-    }
-  }, []);
-
   useEffect(() => {
     if (!showOtpStep || countdown <= 0) return;
-    const timer = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
+    const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [showOtpStep, countdown]);
 
-  // Handle visibility changes when switching between Gmail and browser
   useEffect(() => {
-    if (!showOtpStep) return;
-    const handleResume = () => {
-      if (document.visibilityState === 'visible') {
-        const session = getPendingOtpSession();
-        if (session) {
-          setCountdown(calculateOtpCountdown(session.sentAt));
-          if (session.digits && session.digits.some(d => d !== '')) {
-            setOtp(session.digits);
-          }
-        }
-        const currentDigits = getPendingOtpSession()?.digits || otp;
-        const firstEmpty = currentDigits.findIndex(d => !d);
-        const targetIdx = firstEmpty === -1 ? 5 : firstEmpty;
-        setTimeout(() => otpInputRefs.current[targetIdx]?.focus(), 100);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleResume);
-    window.addEventListener('pageshow', handleResume);
-    window.addEventListener('focus', handleResume);
-
-    const currentDigits = getPendingOtpSession()?.digits || otp;
-    const firstEmpty = currentDigits.findIndex(d => !d);
-    otpInputRefs.current[firstEmpty === -1 ? 0 : firstEmpty]?.focus();
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleResume);
-      window.removeEventListener('pageshow', handleResume);
-      window.removeEventListener('focus', handleResume);
-    };
-  }, [showOtpStep]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (otpSent && !showOtpStep) {
+    if (otpSent) {
       setShowOtpStep(true);
       setCountdown(60);
-      const freshDigits = ['', '', '', '', '', ''];
-      setOtp(freshDigits);
+      setOtp(['', '', '', '', '', '']);
       setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
     }
-  }, [otpSent, showOtpStep]);
+  }, [otpSent]);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
-    savePendingOtpSession({ email, flow: 'signup', signupName: fullName });
     await sendOtp(email, true, fullName);
   };
 
@@ -112,7 +55,6 @@ export default function SignupPage() {
     const newOtp = [...otp];
     newOtp[index] = val.slice(-1);
     setOtp(newOtp);
-    updatePendingOtpDigits(newOtp);
     clearError();
 
     if (val && index < 5) {
@@ -124,10 +66,7 @@ export default function SignupPage() {
       if (token.length === 6) {
         verifyOtp(email, token, fullName).then(() => {
           const { session } = useAuthStore.getState();
-          if (session) {
-            clearPendingOtpSession();
-            router.push('/');
-          }
+          if (session) router.push('/');
         });
       }
     }
@@ -142,65 +81,28 @@ export default function SignupPage() {
   const handleOtpPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
-
     const newOtp = [...otp];
     for (let i = 0; i < pasted.length; i++) {
       newOtp[i] = pasted[i];
     }
     setOtp(newOtp);
-    updatePendingOtpDigits(newOtp);
-
     if (pasted.length === 6) {
       otpInputRefs.current[5]?.focus();
       verifyOtp(email, pasted, fullName).then(() => {
         const { session } = useAuthStore.getState();
-        if (session) {
-          clearPendingOtpSession();
-          router.push('/');
-        }
+        if (session) router.push('/');
       });
     } else {
       otpInputRefs.current[Math.min(pasted.length, 5)]?.focus();
     }
   };
 
-  const handleClipboardPaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const digitsOnly = text.replace(/\D/g, '').slice(0, 6);
-      if (!digitsOnly) return;
-
-      const newOtp = [...otp];
-      for (let i = 0; i < digitsOnly.length; i++) {
-        newOtp[i] = digitsOnly[i];
-      }
-      setOtp(newOtp);
-      updatePendingOtpDigits(newOtp);
-
-      if (digitsOnly.length === 6) {
-        otpInputRefs.current[5]?.focus();
-        await verifyOtp(email, digitsOnly, fullName);
-        const { session } = useAuthStore.getState();
-        if (session) {
-          clearPendingOtpSession();
-          router.push('/');
-        }
-      } else {
-        otpInputRefs.current[Math.min(digitsOnly.length, 5)]?.focus();
-      }
-    } catch {}
-  };
-
   const handleResendOtp = async () => {
     if (countdown > 0) return;
     clearError();
-    savePendingOtpSession({ email, flow: 'signup', signupName: fullName });
     await sendOtp(email, true, fullName);
     setCountdown(60);
-    const freshDigits = ['', '', '', '', '', ''];
-    setOtp(freshDigits);
-    updatePendingOtpDigits(freshDigits);
+    setOtp(['', '', '', '', '', '']);
     otpInputRefs.current[0]?.focus();
   };
 
@@ -210,10 +112,7 @@ export default function SignupPage() {
     if (token.length === 6) {
       await verifyOtp(email, token, fullName);
       const { session } = useAuthStore.getState();
-      if (session) {
-        clearPendingOtpSession();
-        router.push('/');
-      }
+      if (session) router.push('/');
     }
   };
 
@@ -353,7 +252,6 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={() => {
-                  clearPendingOtpSession();
                   setShowOtpStep(false);
                   clearError();
                   resetOtp();
@@ -382,7 +280,6 @@ export default function SignupPage() {
                     type="text"
                     inputMode="numeric"
                     maxLength={1}
-                    autoComplete={index === 0 ? 'one-time-code' : 'off'}
                     value={digit}
                     onChange={(e) => handleOtpChange(index, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(index, e)}
@@ -395,18 +292,6 @@ export default function SignupPage() {
                     aria-label={`Digit ${index + 1}`}
                   />
                 ))}
-              </div>
-
-              {/* Quick Clipboard Paste Button */}
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={handleClipboardPaste}
-                  className="inline-flex items-center gap-1.5 text-fluid-xs font-medium text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 px-3 py-1.5 rounded-full transition-colors active:scale-95"
-                >
-                  <ClipboardCheck className="w-3.5 h-3.5" />
-                  Paste code from clipboard
-                </button>
               </div>
 
               {error && (

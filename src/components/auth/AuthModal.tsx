@@ -1,24 +1,17 @@
 'use client';
 
-import { X, Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft, ClipboardCheck } from 'lucide-react';
+import { X, Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/cn';
 import { Logo } from '@/components/shared/Logo';
 import { useClickOutside } from '@/hooks/useClickOutside';
-import {
-  getPendingOtpSession,
-  savePendingOtpSession,
-  updatePendingOtpDigits,
-  clearPendingOtpSession,
-  calculateOtpCountdown,
-} from '@/lib/auth/otpSession';
 
 type Step = 'choice' | 'parent-login' | 'parent-signup' | 'otp-verify' | 'child-login';
 
 export function AuthModal() {
-  const { authModalOpen, closeAuthModal, openAuthModal } = useUIStore();
+  const { authModalOpen, closeAuthModal } = useUIStore();
   const { loading, error, otpSent, clearError, resetOtp } = useAuthStore();
   const [step, setStep] = useState<Step>('choice');
   const [showPassword, setShowPassword] = useState(false);
@@ -28,20 +21,7 @@ export function AuthModal() {
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
 
-  // Restore OTP step if user switches back to browser from Gmail / app switcher
-  useEffect(() => {
-    const pending = getPendingOtpSession();
-    if (pending && pending.flow === 'modal') {
-      openAuthModal();
-      setStep('otp-verify');
-      if (pending.signupName) {
-        setSignupName(pending.signupName);
-      }
-    }
-  }, [openAuthModal]);
-
-  // Do not dismiss on outside click when waiting for OTP
-  useClickOutside(modalRef, closeAuthModal, authModalOpen && step !== 'otp-verify');
+  useClickOutside(modalRef, closeAuthModal, authModalOpen);
 
   useEffect(() => {
     if (otpSent && (step === 'parent-login' || step === 'parent-signup')) {
@@ -51,7 +31,6 @@ export function AuthModal() {
   }, [otpSent, step]);
 
   const handleClose = useCallback(() => {
-    clearPendingOtpSession();
     closeAuthModal();
     setStep('choice');
     clearError();
@@ -62,7 +41,6 @@ export function AuthModal() {
   const handleBack = useCallback(() => {
     clearError();
     if (step === 'otp-verify') {
-      clearPendingOtpSession();
       resetOtp();
       setStep(prevStep);
     } else {
@@ -130,13 +108,7 @@ export function AuthModal() {
       aria-modal="true"
       aria-label={step === 'choice' ? 'Sign in to JruJu TV' : undefined}
     >
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        aria-hidden="true"
-        onClick={() => {
-          if (step !== 'otp-verify') handleClose();
-        }}
-      />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" onClick={handleClose} />
 
       <div
         ref={modalRef}
@@ -410,7 +382,6 @@ function ParentLoginForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    savePendingOtpSession({ email, flow: 'modal' });
     await sendOtp(email, false);
   };
 
@@ -466,7 +437,6 @@ function ParentSignupForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    savePendingOtpSession({ email, flow: 'modal', signupName });
     await sendOtp(email, true, signupName);
   };
 
@@ -525,56 +495,19 @@ function OtpVerifyForm({
   signupName?: string;
 }) {
   const { verifyOtp, sendOtp, loading, error, otpEmail, clearError } = useAuthStore();
-  const [otp, setOtp] = useState<string[]>(() => {
-    const pending = getPendingOtpSession();
-    return pending?.digits || ['', '', '', '', '', ''];
-  });
-  const [countdown, setCountdown] = useState<number>(() => {
-    const pending = getPendingOtpSession();
-    return pending ? calculateOtpCountdown(pending.sentAt) : 60;
-  });
+  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
+  const [countdown, setCountdown] = useState(60);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Ticking countdown
   useEffect(() => {
     if (countdown <= 0) return;
-    const timer = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
+    const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // Refocus and sync when returning from Gmail / background
   useEffect(() => {
-    const handleResume = () => {
-      if (document.visibilityState === 'visible') {
-        const pending = getPendingOtpSession();
-        if (pending) {
-          setCountdown(calculateOtpCountdown(pending.sentAt));
-          if (pending.digits && pending.digits.some(d => d !== '')) {
-            setOtp(pending.digits);
-          }
-        }
-        const currentDigits = getPendingOtpSession()?.digits || otp;
-        const firstEmpty = currentDigits.findIndex(d => !d);
-        const targetIdx = firstEmpty === -1 ? 5 : firstEmpty;
-        setTimeout(() => inputRefs.current[targetIdx]?.focus(), 100);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleResume);
-    window.addEventListener('pageshow', handleResume);
-    window.addEventListener('focus', handleResume);
-
-    // Initial focus
-    const initialDigits = getPendingOtpSession()?.digits || otp;
-    const firstEmpty = initialDigits.findIndex(d => !d);
-    inputRefs.current[firstEmpty === -1 ? 0 : firstEmpty]?.focus();
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleResume);
-      window.removeEventListener('pageshow', handleResume);
-      window.removeEventListener('focus', handleResume);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    inputRefs.current[0]?.focus();
+  }, []);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -582,7 +515,6 @@ function OtpVerifyForm({
     const newOtp = [...otp];
     newOtp[index] = value.slice(-1);
     setOtp(newOtp);
-    updatePendingOtpDigits(newOtp);
     clearError();
 
     if (value && index < 5) {
@@ -594,10 +526,7 @@ function OtpVerifyForm({
       if (fullOtp.length === 6 && otpEmail) {
         verifyOtp(otpEmail, fullOtp, signupName).then(() => {
           const { session } = useAuthStore.getState();
-          if (session) {
-            clearPendingOtpSession();
-            onClose();
-          }
+          if (session) onClose();
         });
       }
     }
@@ -612,67 +541,28 @@ function OtpVerifyForm({
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
-
     const newOtp = [...otp];
     for (let i = 0; i < pasted.length; i++) {
       newOtp[i] = pasted[i];
     }
     setOtp(newOtp);
-    updatePendingOtpDigits(newOtp);
-
     if (pasted.length === 6 && otpEmail) {
       inputRefs.current[5]?.focus();
       verifyOtp(otpEmail, pasted, signupName).then(() => {
         const { session } = useAuthStore.getState();
-        if (session) {
-          clearPendingOtpSession();
-          onClose();
-        }
+        if (session) onClose();
       });
     } else {
       inputRefs.current[Math.min(pasted.length, 5)]?.focus();
     }
   };
 
-  const handleClipboardPaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const digitsOnly = text.replace(/\D/g, '').slice(0, 6);
-      if (!digitsOnly) return;
-
-      const newOtp = [...otp];
-      for (let i = 0; i < digitsOnly.length; i++) {
-        newOtp[i] = digitsOnly[i];
-      }
-      setOtp(newOtp);
-      updatePendingOtpDigits(newOtp);
-
-      if (digitsOnly.length === 6 && otpEmail) {
-        inputRefs.current[5]?.focus();
-        await verifyOtp(otpEmail, digitsOnly, signupName);
-        const { session } = useAuthStore.getState();
-        if (session) {
-          clearPendingOtpSession();
-          onClose();
-        }
-      } else {
-        inputRefs.current[Math.min(digitsOnly.length, 5)]?.focus();
-      }
-    } catch {
-      // Browser clipboard permission denied or not supported; standard paste still works
-    }
-  };
-
   const handleResend = async () => {
     if (countdown > 0 || !otpEmail) return;
     clearError();
-    savePendingOtpSession({ email: otpEmail, flow: 'modal', signupName });
     await sendOtp(otpEmail, true, signupName);
     setCountdown(60);
-    const freshDigits = ['', '', '', '', '', ''];
-    setOtp(freshDigits);
-    updatePendingOtpDigits(freshDigits);
+    setOtp(['', '', '', '', '', '']);
     inputRefs.current[0]?.focus();
   };
 
@@ -682,10 +572,7 @@ function OtpVerifyForm({
     if (fullOtp.length === 6 && otpEmail) {
       await verifyOtp(otpEmail, fullOtp, signupName);
       const { session } = useAuthStore.getState();
-      if (session) {
-        clearPendingOtpSession();
-        onClose();
-      }
+      if (session) onClose();
     }
   };
 
@@ -707,7 +594,6 @@ function OtpVerifyForm({
               type="text"
               inputMode="numeric"
               maxLength={1}
-              autoComplete={index === 0 ? 'one-time-code' : 'off'}
               value={digit}
               onChange={(e) => handleChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
@@ -720,18 +606,6 @@ function OtpVerifyForm({
               aria-label={`Digit ${index + 1}`}
             />
           ))}
-        </div>
-
-        {/* Quick Clipboard Paste Button */}
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={handleClipboardPaste}
-            className="inline-flex items-center gap-1.5 text-fluid-xs font-medium text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 px-3 py-1.5 rounded-full transition-colors active:scale-95"
-          >
-            <ClipboardCheck className="w-3.5 h-3.5" />
-            Paste code from clipboard
-          </button>
         </div>
 
         <ErrorMessage message={error} />

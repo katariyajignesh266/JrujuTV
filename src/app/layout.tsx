@@ -10,6 +10,7 @@ import { BottomNavBar } from '@/components/layout/BottomNavBar';
 import { SidebarDrawer } from '@/components/layout/SidebarDrawer';
 import { ScrollToTop } from '@/components/layout/ScrollToTop';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { KeepAlive } from '@/components/providers/KeepAlive';
 
 export const metadata: Metadata = {
   title: 'JruJu TV — Kids\' Content Platform',
@@ -99,6 +100,9 @@ export default function RootLayout({
 
             {/* Auth modal (global) */}
             <AuthModal />
+
+            {/* Keep Render.com server awake — pings /api/health every 10 min */}
+            <KeepAlive />
           </AuthProvider>
         </ThemeProvider>
       </body>

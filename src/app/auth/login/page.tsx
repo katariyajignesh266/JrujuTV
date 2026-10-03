@@ -5,16 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { PageShell } from '@/components/layout/PageShell';
 import { Logo } from '@/components/shared/Logo';
-import { Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft, ClipboardCheck } from 'lucide-react';
+import { Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import Link from 'next/link';
-import {
-  getPendingOtpSession,
-  savePendingOtpSession,
-  updatePendingOtpDigits,
-  clearPendingOtpSession,
-  calculateOtpCountdown,
-} from '@/lib/auth/otpSession';
 
 function LoginFormContent() {
   const router = useRouter();
@@ -47,82 +40,31 @@ function LoginFormContent() {
     resetOtp,
   } = useAuthStore();
 
-  // Restore OTP session if user switched back to browser
-  useEffect(() => {
-    const session = getPendingOtpSession();
-    if (session && session.flow === 'login') {
-      setActiveTab('parent');
-      setParentEmail(session.email);
-      setShowOtpStep(true);
-      if (session.digits && session.digits.some(d => d !== '')) {
-        setOtp(session.digits);
-      }
-      setCountdown(calculateOtpCountdown(session.sentAt));
-    }
-  }, []);
-
   const handleTabSwitch = (tab: 'parent' | 'child') => {
     setActiveTab(tab);
     clearError();
     resetOtp();
-    clearPendingOtpSession();
     setShowOtpStep(false);
   };
 
   useEffect(() => {
     if (!showOtpStep || countdown <= 0) return;
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
+    const t = setInterval(() => setCountdown(c => c - 1), 1000);
     return () => clearInterval(t);
   }, [showOtpStep, countdown]);
 
-  // Handle visibility changes when switching between Gmail and browser
   useEffect(() => {
-    if (!showOtpStep) return;
-    const handleResume = () => {
-      if (document.visibilityState === 'visible') {
-        const session = getPendingOtpSession();
-        if (session) {
-          setCountdown(calculateOtpCountdown(session.sentAt));
-          if (session.digits && session.digits.some(d => d !== '')) {
-            setOtp(session.digits);
-          }
-        }
-        const currentDigits = getPendingOtpSession()?.digits || otp;
-        const firstEmpty = currentDigits.findIndex(d => !d);
-        const targetIdx = firstEmpty === -1 ? 5 : firstEmpty;
-        setTimeout(() => otpRefs.current[targetIdx]?.focus(), 100);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleResume);
-    window.addEventListener('pageshow', handleResume);
-    window.addEventListener('focus', handleResume);
-
-    const currentDigits = getPendingOtpSession()?.digits || otp;
-    const firstEmpty = currentDigits.findIndex(d => !d);
-    otpRefs.current[firstEmpty === -1 ? 0 : firstEmpty]?.focus();
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleResume);
-      window.removeEventListener('pageshow', handleResume);
-      window.removeEventListener('focus', handleResume);
-    };
-  }, [showOtpStep]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (otpSent && activeTab === 'parent' && !showOtpStep) {
+    if (otpSent && activeTab === 'parent') {
       setShowOtpStep(true);
       setCountdown(60);
-      const freshDigits = ['', '', '', '', '', ''];
-      setOtp(freshDigits);
+      setOtp(['', '', '', '', '', '']);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     }
-  }, [otpSent, activeTab, showOtpStep]);
+  }, [otpSent, activeTab]);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
-    savePendingOtpSession({ email: parentEmail, flow: 'login' });
     await sendOtp(parentEmail, false);
   };
 
@@ -131,15 +73,11 @@ function LoginFormContent() {
     const next = [...otp];
     next[i] = val.slice(-1);
     setOtp(next);
-    updatePendingOtpDigits(next);
     clearError();
     if (val && i < 5) otpRefs.current[i + 1]?.focus();
     if (val && i === 5 && next.join('').length === 6) {
       verifyOtp(parentEmail, next.join('')).then(() => {
-        if (useAuthStore.getState().session) {
-          clearPendingOtpSession();
-          router.push('/');
-        }
+        if (useAuthStore.getState().session) router.push('/');
       });
     }
   };
@@ -151,55 +89,25 @@ function LoginFormContent() {
   const handleOtpPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
     const next = [...otp];
     for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
     setOtp(next);
-    updatePendingOtpDigits(next);
     if (pasted.length === 6) {
       otpRefs.current[5]?.focus();
       verifyOtp(parentEmail, pasted).then(() => {
-        if (useAuthStore.getState().session) {
-          clearPendingOtpSession();
-          router.push('/');
-        }
+        if (useAuthStore.getState().session) router.push('/');
       });
     } else {
       otpRefs.current[Math.min(pasted.length, 5)]?.focus();
     }
   };
 
-  const handleClipboardPaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const digitsOnly = text.replace(/\D/g, '').slice(0, 6);
-      if (!digitsOnly) return;
-      const next = [...otp];
-      for (let i = 0; i < digitsOnly.length; i++) next[i] = digitsOnly[i];
-      setOtp(next);
-      updatePendingOtpDigits(next);
-      if (digitsOnly.length === 6) {
-        otpRefs.current[5]?.focus();
-        await verifyOtp(parentEmail, digitsOnly);
-        if (useAuthStore.getState().session) {
-          clearPendingOtpSession();
-          router.push('/');
-        }
-      } else {
-        otpRefs.current[Math.min(digitsOnly.length, 5)]?.focus();
-      }
-    } catch {}
-  };
-
   const handleResend = async () => {
     if (countdown > 0) return;
     clearError();
-    savePendingOtpSession({ email: parentEmail, flow: 'login' });
     await sendOtp(parentEmail, false);
     setCountdown(60);
-    const fresh = ['', '', '', '', '', ''];
-    setOtp(fresh);
-    updatePendingOtpDigits(fresh);
+    setOtp(['', '', '', '', '', '']);
     otpRefs.current[0]?.focus();
   };
 
@@ -208,10 +116,7 @@ function LoginFormContent() {
     const token = otp.join('');
     if (token.length === 6) {
       await verifyOtp(parentEmail, token);
-      if (useAuthStore.getState().session) {
-        clearPendingOtpSession();
-        router.push('/');
-      }
+      if (useAuthStore.getState().session) router.push('/');
     }
   };
 
@@ -316,7 +221,7 @@ function LoginFormContent() {
         {activeTab === 'parent' && showOtpStep && (
           <form onSubmit={handleVerifySubmit} className="space-y-4">
             <button type="button"
-              onClick={() => { clearPendingOtpSession(); setShowOtpStep(false); clearError(); resetOtp(); }}
+              onClick={() => { setShowOtpStep(false); clearError(); resetOtp(); }}
               className="text-content-secondary hover:text-content-primary flex items-center gap-1 text-fluid-sm -ml-1 transition-colors">
               <ChevronLeft size={18} /> Change email
             </button>
@@ -332,7 +237,6 @@ function LoginFormContent() {
                 <input key={i}
                   ref={el => { otpRefs.current[i] = el; }}
                   type="text" inputMode="numeric" maxLength={1}
-                  autoComplete={i === 0 ? 'one-time-code' : 'off'}
                   value={d}
                   onChange={e => handleOtpChange(i, e.target.value)}
                   onKeyDown={e => handleOtpKeyDown(i, e)}
@@ -344,18 +248,6 @@ function LoginFormContent() {
                   aria-label={`Digit ${i + 1}`}
                 />
               ))}
-            </div>
-
-            {/* Quick Clipboard Paste Button */}
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleClipboardPaste}
-                className="inline-flex items-center gap-1.5 text-fluid-xs font-medium text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 px-3 py-1.5 rounded-full transition-colors active:scale-95"
-              >
-                <ClipboardCheck className="w-3.5 h-3.5" />
-                Paste code from clipboard
-              </button>
             </div>
 
             {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-fluid-sm text-center">{error}</div>}
