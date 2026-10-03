@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/layout/PageShell';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
@@ -36,6 +37,7 @@ interface ChildRecord {
 export default function ProfilePage() {
   const { role, user, session, logout } = useAuthStore();
   const { openAuthModal } = useUIStore();
+  const router = useRouter();
   const isGuest = role === 'guest';
 
   // Modal / panel states
@@ -314,7 +316,11 @@ export default function ProfilePage() {
           )}
 
           <ProfileSection title="Preferences">
-            <ProfileItem icon={Settings} label="Settings" />
+            <ProfileItem
+              icon={Settings}
+              label="Settings"
+              onClick={() => router.push('/settings')}
+            />
           </ProfileSection>
 
           <ProfileSection title="">
@@ -636,3 +642,4 @@ function ProfileItem({
     </button>
   );
 }
+
