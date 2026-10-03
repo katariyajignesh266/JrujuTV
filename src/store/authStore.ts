@@ -138,22 +138,39 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       }
     },
 
-    signInWithGoogle: async () => {
-      set({ loading: true, error: null });
-      try {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-        if (error) throw error;
-        // Redirect happens automatically — loading stays true until redirect
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Google sign-in failed';
-        set({ loading: false, error: message });
-      }
-    },
+signInWithGoogle: async () => {
+  set({ loading: true, error: null });
+
+  try {
+    const isProduction =
+      window.location.hostname === 'jrujutv.onrender.com';
+
+    const redirectTo = isProduction
+      ? 'https://jrujutv.onrender.com/auth/callback'
+      : `${window.location.origin}/auth/callback`;
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+      },
+    });
+
+    if (error) throw error;
+
+    // Google OAuth redirect happens automatically.
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'Google sign-in failed';
+
+    set({
+      loading: false,
+      error: message,
+    });
+  }
+},
 
     childLogin: async (username: string, password: string) => {
       set({ loading: true, error: null });
