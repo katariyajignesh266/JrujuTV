@@ -1,4 +1,4 @@
-﻿// src/store/authStore.ts
+// src/store/authStore.ts
 
 import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';
@@ -82,6 +82,23 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     sendSignupMagicLink: async (email: string, fullName: string) => {
       set({ loading: true, error: null });
       try {
+        // ── Step 1: Check if this email is already registered in the profiles table ──
+        const { data: existingProfile, error: profileCheckError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (!profileCheckError && existingProfile) {
+          // Account already exists — tell the user to log in instead
+          set({
+            loading: false,
+            error: 'This email is already registered. Please Log In instead.',
+          });
+          return;
+        }
+
+        // ── Step 2: Send the magic-link / OTP ──
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         // Encode fullName in the redirect URL so callback can upsert the profile
         const redirectTo = `${origin}/auth/callback?next=/profile&full_name=${encodeURIComponent(fullName)}`;
@@ -95,7 +112,21 @@ export const useAuthStore = create<AuthState>()((set, get) => {
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          // Supabase also blocks re-signup with certain error messages — handle gracefully
+          if (
+            error.message.includes('User already registered') ||
+            error.message.includes('already registered') ||
+            error.message.includes('already exists')
+          ) {
+            set({
+              loading: false,
+              error: 'This email is already registered. Please Log In instead.',
+            });
+            return;
+          }
+          throw error;
+        }
 
         set({ loading: false, emailConfirmationSent: true, otpEmail: email });
       } catch (err) {
@@ -280,7 +311,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
           throw new Error(result.error || 'Failed to delete account');
         }
 
-        // Sign out locally â€” the server-side user no longer exists
+        // Sign out locally — the server-side user no longer exists
         await supabase.auth.signOut();
         set({
           role: 'guest',
@@ -306,7 +337,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
 
       // 1. Read the existing session from localStorage (persisted by @supabase/ssr).
       //    This is what keeps the user "logged in" across page refreshes and
-      //    dev-server restarts â€” the access/refresh tokens live in localStorage.
+      //    dev-server restarts — the access/refresh tokens live in localStorage.
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           // Upsert profile for Google sign-in users on first load
@@ -334,7 +365,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       // 2. Subscribe to auth state changes so the store stays in sync:
       //    - SIGNED_IN: user just logged in (OTP verified, Google callback, etc.)
       //    - SIGNED_OUT: user clicked logout
-      //    - TOKEN_REFRESHED: Supabase silently refreshed the access token â€”
+      //    - TOKEN_REFRESHED: Supabase silently refreshed the access token —
       //      we must update our store so the new token is used in future requests.
       //    - USER_UPDATED: user metadata changed
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -354,4 +385,3 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
   };
 });
-

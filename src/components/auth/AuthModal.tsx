@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { X, Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft, MailCheck, RefreshCw } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -126,16 +126,18 @@ export function AuthModal() {
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" onClick={handleClose} />
 
+      {/* FIX: flex flex-col so sticky header + scrollable content + switch-link all fit on screen */}
       <div
         ref={modalRef}
         className={cn(
           'relative z-10 w-full sm:max-w-md',
           'bg-surface-elevated rounded-t-3xl sm:rounded-3xl',
           'shadow-xl border border-border',
-          'max-h-[92dvh] overflow-y-auto',
+          'max-h-[90dvh] flex flex-col',
           'animate-in slide-in-from-bottom-4 duration-300'
         )}
       >
+        {/* Sticky header - always visible */}
         <div className="sticky top-0 z-20 flex items-center justify-between p-4 pb-2 bg-surface-elevated/95 backdrop-blur-sm border-b border-border/40">
           {step !== 'choice' ? (
             <button
@@ -159,8 +161,10 @@ export function AuthModal() {
           </button>
         </div>
 
-        <div className="px-5 sm:px-6 pt-2 pb-8">
-          <div className="flex justify-center mb-5">
+        {/* FIX: flex-1 overflow-y-auto so this area scrolls independently */}
+        <div className="px-5 sm:px-6 pt-2 pb-6 flex-1 overflow-y-auto">
+          {/* FIX: reduced mb-5 → mb-3 to save vertical space */}
+          <div className="flex justify-center mb-3">
             <Logo size="md" variant="full" />
           </div>
 
@@ -365,7 +369,8 @@ function GoogleButton() {
 
   return (
     <>
-      <div className="relative my-4">
+      {/* FIX: reduced my-4 → my-3 to save vertical space */}
+      <div className="relative my-3">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-border" />
         </div>
@@ -398,6 +403,8 @@ function GoogleButton() {
   );
 }
 
+// ── Parent Login Form ──────────────────────────────────────────────────────────
+// FIX: Reduced spacing so "Don't have an account? Sign Up" is visible without scrolling
 function ParentLoginForm({
   onSignupClick,
 }: {
@@ -412,14 +419,14 @@ function ParentLoginForm({
   };
 
   return (
-    <>
+    <div className="flex flex-col">
       <h2 className="text-fluid-xl font-display font-bold text-center text-content-primary mb-1">
         Parent Login
       </h2>
-      <p className="text-fluid-sm text-content-secondary text-center mb-5">
+      <p className="text-fluid-sm text-content-secondary text-center mb-4">
         Access your parental admin dashboard
       </p>
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      <form className="space-y-3" onSubmit={handleSubmit}>
         <FormInput
           label="Email Address"
           id="parent-email"
@@ -435,7 +442,8 @@ function ParentLoginForm({
         <SubmitButton label="Log In" isLoading={loading} />
       </form>
       <GoogleButton />
-      <p className="text-center text-fluid-sm text-content-secondary mt-4">
+      {/* FIX: mt-3 instead of mt-4 — now visible without scrolling */}
+      <p className="text-center text-fluid-sm text-content-secondary mt-3">
         Don&apos;t have an account?{' '}
         <button
           type="button"
@@ -445,10 +453,13 @@ function ParentLoginForm({
           Sign Up
         </button>
       </p>
-    </>
+    </div>
   );
 }
 
+// ── Parent Signup Form ─────────────────────────────────────────────────────────
+// FIX: Reduced spacing so "Already have an account? Log In" is visible without scrolling
+// FIX: Shows "Go to Log In" button when duplicate email error detected
 function ParentSignupForm({
   onLoginClick,
   signupName,
@@ -466,15 +477,17 @@ function ParentSignupForm({
     await sendSignupMagicLink(email, signupName);
   };
 
+  const isAlreadyRegistered = error?.includes('already registered');
+
   return (
-    <>
+    <div className="flex flex-col">
       <h2 className="text-fluid-xl font-display font-bold text-center text-content-primary mb-1">
         Create Parent Account
       </h2>
-      <p className="text-fluid-sm text-content-secondary text-center mb-5">
+      <p className="text-fluid-sm text-content-secondary text-center mb-4">
         Set up your family&apos;s safe viewing controls
       </p>
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      <form className="space-y-3" onSubmit={handleSubmit}>
         <FormInput
           label="Full Name"
           id="signup-name"
@@ -500,10 +513,26 @@ function ParentSignupForm({
           <p>We&apos;ll send a confirmation link to your email. Click it to activate your account instantly &mdash; no password needed.</p>
         </div>
         <ErrorMessage message={error} />
-        <SubmitButton label="Create Account &amp; Continue" isLoading={loading} />
+        {/* FIX: If already registered, show "Go to Log In" instead of "Create Account" */}
+        {isAlreadyRegistered ? (
+          <button
+            type="button"
+            onClick={onLoginClick}
+            className={cn(
+              'w-full h-11 rounded-xl font-semibold text-fluid-sm text-white',
+              'bg-brand-primary hover:opacity-90 active:scale-[0.98] transition-all duration-150',
+              'focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2'
+            )}
+          >
+            Go to Log In
+          </button>
+        ) : (
+          <SubmitButton label="Create Account &amp; Continue" isLoading={loading} />
+        )}
       </form>
       <GoogleButton />
-      <p className="text-center text-fluid-sm text-content-secondary mt-4">
+      {/* FIX: mt-3 instead of mt-4 — now visible without scrolling */}
+      <p className="text-center text-fluid-sm text-content-secondary mt-3">
         Already have an account?{' '}
         <button
           type="button"
@@ -513,7 +542,7 @@ function ParentSignupForm({
           Log In
         </button>
       </p>
-    </>
+    </div>
   );
 }
 
