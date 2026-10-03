@@ -138,39 +138,44 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       }
     },
 
-signInWithGoogle: async () => {
-  set({ loading: true, error: null });
+    signInWithGoogle: async () => {
+      set({ loading: true, error: null });
 
-  try {
-    const isProduction =
-      window.location.hostname === 'jrujutv.onrender.com';
+      try {
+        const isProduction =
+          typeof window !== 'undefined' &&
+          (window.location.hostname === 'jrujutv.onrender.com' ||
+            !window.location.hostname.includes('localhost'));
 
-    const redirectTo = isProduction
-      ? 'https://jrujutv.onrender.com/auth/callback'
-      : `${window.location.origin}/auth/callback`;
+        const origin =
+          isProduction && typeof window !== 'undefined' && window.location.hostname === 'jrujutv.onrender.com'
+            ? 'https://jrujutv.onrender.com'
+            : (typeof window !== 'undefined' ? window.location.origin : '');
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-      },
-    });
+        const redirectTo = `${origin}/auth/callback?next=/profile`;
 
-    if (error) throw error;
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo,
+          },
+        });
 
-    // Google OAuth redirect happens automatically.
-  } catch (err) {
-    const message =
-      err instanceof Error
-        ? err.message
-        : 'Google sign-in failed';
+        if (error) throw error;
 
-    set({
-      loading: false,
-      error: message,
-    });
-  }
-},
+        // Google OAuth redirect happens automatically.
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Google sign-in failed';
+
+        set({
+          loading: false,
+          error: message,
+        });
+      }
+    },
 
     childLogin: async (username: string, password: string) => {
       set({ loading: true, error: null });
@@ -278,4 +283,3 @@ signInWithGoogle: async () => {
     },
   };
 });
-

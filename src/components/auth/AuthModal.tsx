@@ -12,7 +12,7 @@ type Step = 'choice' | 'parent-login' | 'parent-signup' | 'otp-verify' | 'child-
 
 export function AuthModal() {
   const { authModalOpen, closeAuthModal } = useUIStore();
-  const { loading, error, otpSent, clearError, resetOtp } = useAuthStore();
+  const { session, loading, error, otpSent, clearError, resetOtp } = useAuthStore();
   const [step, setStep] = useState<Step>('choice');
   const [showPassword, setShowPassword] = useState(false);
   const [prevStep, setPrevStep] = useState<Step>('parent-login');
@@ -23,13 +23,6 @@ export function AuthModal() {
 
   useClickOutside(modalRef, closeAuthModal, authModalOpen);
 
-  useEffect(() => {
-    if (otpSent && (step === 'parent-login' || step === 'parent-signup')) {
-      setPrevStep(step);
-      setStep('otp-verify');
-    }
-  }, [otpSent, step]);
-
   const handleClose = useCallback(() => {
     closeAuthModal();
     setStep('choice');
@@ -37,6 +30,19 @@ export function AuthModal() {
     resetOtp();
     setSignupName('');
   }, [closeAuthModal, clearError, resetOtp]);
+
+  useEffect(() => {
+    if (session && authModalOpen) {
+      handleClose();
+    }
+  }, [session, authModalOpen, handleClose]);
+
+  useEffect(() => {
+    if (otpSent && (step === 'parent-login' || step === 'parent-signup')) {
+      setPrevStep(step);
+      setStep('otp-verify');
+    }
+  }, [otpSent, step]);
 
   const handleBack = useCallback(() => {
     clearError();
