@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import { X, Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft } from 'lucide-react';
+import { X, Shield, User, Lock, Mail, Eye, EyeOff, ChevronLeft, MailCheck, RefreshCw } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
@@ -8,11 +8,11 @@ import { cn } from '@/lib/cn';
 import { Logo } from '@/components/shared/Logo';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
-type Step = 'choice' | 'parent-login' | 'parent-signup' | 'otp-verify' | 'child-login';
+type Step = 'choice' | 'parent-login' | 'parent-signup' | 'otp-verify' | 'signup-confirmation' | 'child-login';
 
 export function AuthModal() {
   const { authModalOpen, closeAuthModal } = useUIStore();
-  const { session, loading, error, otpSent, clearError, resetOtp } = useAuthStore();
+  const { session, loading, error, otpSent, emailConfirmationSent, clearError, resetOtp } = useAuthStore();
   const [step, setStep] = useState<Step>('choice');
   const [showPassword, setShowPassword] = useState(false);
   const [prevStep, setPrevStep] = useState<Step>('parent-login');
@@ -38,21 +38,31 @@ export function AuthModal() {
   }, [session, authModalOpen, handleClose]);
 
   useEffect(() => {
-    if (otpSent && (step === 'parent-login' || step === 'parent-signup')) {
-      setPrevStep(step);
+    if (otpSent && step === 'parent-login') {
+      setPrevStep('parent-login');
       setStep('otp-verify');
     }
   }, [otpSent, step]);
+
+  useEffect(() => {
+    if (emailConfirmationSent && step === 'parent-signup') {
+      setPrevStep('parent-signup');
+      setStep('signup-confirmation');
+    }
+  }, [emailConfirmationSent, step]);
 
   const handleBack = useCallback(() => {
     clearError();
     if (step === 'otp-verify') {
       resetOtp();
-      setStep(prevStep);
+      setStep('parent-login');
+    } else if (step === 'signup-confirmation') {
+      resetOtp();
+      setStep('parent-signup');
     } else {
       setStep('choice');
     }
-  }, [step, prevStep, clearError, resetOtp]);
+  }, [step, clearError, resetOtp]);
 
   useEffect(() => {
     if (!authModalOpen) return;
@@ -230,10 +240,20 @@ export function AuthModal() {
             />
           )}
 
+          {step === 'signup-confirmation' && (
+            <SignupConfirmationView
+              signupName={signupName}
+              onChangeEmail={() => {
+                resetOtp();
+                clearError();
+                setStep('parent-signup');
+              }}
+            />
+          )}
+
           {step === 'otp-verify' && (
             <OtpVerifyForm
               onClose={handleClose}
-              signupName={prevStep === 'parent-signup' ? signupName : undefined}
             />
           )}
 
@@ -438,12 +458,12 @@ function ParentSignupForm({
   signupName: string;
   setSignupName: (v: string) => void;
 }) {
-  const { sendOtp, loading, error } = useAuthStore();
+  const { sendSignupMagicLink, loading, error } = useAuthStore();
   const [email, setEmail] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await sendOtp(email, true, signupName);
+    await sendSignupMagicLink(email, signupName);
   };
 
   return (
@@ -475,6 +495,10 @@ function ParentSignupForm({
           onChange={(e) => setEmail(e.target.value)}
           required
         />
+        <div className="p-3 rounded-xl bg-surface-secondary text-[12px] text-content-secondary space-y-1">
+          <p className="font-medium text-content-primary">Passwordless &amp; Secure:</p>
+          <p>We&apos;ll send a confirmation link to your email. Click it to activate your account instantly &mdash; no password needed.</p>
+        </div>
         <ErrorMessage message={error} />
         <SubmitButton label="Create Account &amp; Continue" isLoading={loading} />
       </form>
@@ -493,12 +517,93 @@ function ParentSignupForm({
   );
 }
 
+function SignupConfirmationView({
+  signupName,
+  onChangeEmail,
+}: {
+  signupName: string;
+  onChangeEmail: () => void;
+}) {
+  const { sendSignupMagicLink, loading, error, otpEmail, clearError } = useAuthStore();
+  const [countdown, setCountdown] = useState(60);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  const handleResend = async () => {
+    if (countdown > 0 || !otpEmail) return;
+    clearError();
+    await sendSignupMagicLink(otpEmail, signupName);
+    setCountdown(60);
+  };
+
+  return (
+    <div className="space-y-5 py-1">
+      <div className="flex flex-col items-center text-center gap-3">
+        <div className="h-16 w-16 rounded-2xl bg-brand-primary/10 text-brand-primary flex items-center justify-center">
+          <MailCheck size={32} />
+        </div>
+        <div>
+          <h2 className="text-fluid-xl font-display font-bold text-content-primary mb-1">
+            Check your email!
+          </h2>
+          <p className="text-fluid-sm text-content-secondary">
+            We sent a confirmation link to
+          </p>
+          <p className="font-semibold text-content-primary text-fluid-sm mt-0.5 break-all">
+            {otpEmail}
+          </p>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-xl bg-surface-secondary border border-border space-y-2 text-fluid-sm text-content-secondary">
+        <p className="font-medium text-content-primary">Next steps to sign up:</p>
+        <ol className="list-decimal list-inside space-y-1.5 text-[13px]">
+          <li>Open your email inbox</li>
+          <li>Look for the email from <span className="font-semibold text-content-primary">JruJuTV</span> with subject &quot;Confirm your email address&quot;</li>
+          <li>Click the <span className="font-semibold text-content-primary">&quot;Confirm email address&quot;</span> link</li>
+          <li>You will be automatically logged in &mdash; no code or password required!</li>
+        </ol>
+      </div>
+
+      <ErrorMessage message={error} />
+
+      <div className="text-center text-fluid-sm text-content-secondary">
+        {countdown > 0 ? (
+          <span className="text-content-disabled">
+            Resend link in <span className="font-medium text-content-secondary">{countdown}s</span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 text-brand-primary font-medium hover:underline disabled:opacity-60"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Resend confirmation email
+          </button>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onChangeEmail}
+        className="w-full h-10 rounded-xl text-fluid-sm font-medium border border-border text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-all"
+      >
+        Use a different email
+      </button>
+    </div>
+  );
+}
+
 function OtpVerifyForm({
   onClose,
-  signupName,
 }: {
   onClose: () => void;
-  signupName?: string;
 }) {
   const { verifyOtp, sendOtp, loading, error, otpEmail, clearError } = useAuthStore();
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
@@ -530,7 +635,7 @@ function OtpVerifyForm({
     if (value && index === 5) {
       const fullOtp = newOtp.join('');
       if (fullOtp.length === 6 && otpEmail) {
-        verifyOtp(otpEmail, fullOtp, signupName).then(() => {
+        verifyOtp(otpEmail, fullOtp).then(() => {
           const { session } = useAuthStore.getState();
           if (session) onClose();
         });
@@ -554,7 +659,7 @@ function OtpVerifyForm({
     setOtp(newOtp);
     if (pasted.length === 6 && otpEmail) {
       inputRefs.current[5]?.focus();
-      verifyOtp(otpEmail, pasted, signupName).then(() => {
+      verifyOtp(otpEmail, pasted).then(() => {
         const { session } = useAuthStore.getState();
         if (session) onClose();
       });
@@ -566,7 +671,7 @@ function OtpVerifyForm({
   const handleResend = async () => {
     if (countdown > 0 || !otpEmail) return;
     clearError();
-    await sendOtp(otpEmail, true, signupName);
+    await sendOtp(otpEmail, false);
     setCountdown(60);
     setOtp(['', '', '', '', '', '']);
     inputRefs.current[0]?.focus();
@@ -576,7 +681,7 @@ function OtpVerifyForm({
     e.preventDefault();
     const fullOtp = otp.join('');
     if (fullOtp.length === 6 && otpEmail) {
-      await verifyOtp(otpEmail, fullOtp, signupName);
+      await verifyOtp(otpEmail, fullOtp);
       const { session } = useAuthStore.getState();
       if (session) onClose();
     }
