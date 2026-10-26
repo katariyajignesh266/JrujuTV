@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   Loader2,
   X,
+  Tv2,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/useTheme';
@@ -93,6 +95,24 @@ export default function SettingsPage() {
                 Active
               </span>
             </div>
+            {role === 'parent' && (
+              <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                <div>
+                  <p className="text-fluid-sm font-medium text-content-primary flex items-center gap-2">
+                    <Tv2 size={16} className="text-brand-primary" /> Manage Approved Channels
+                  </p>
+                  <p className="text-[12px] text-content-secondary">Add, hide, or sync YouTube channels for your children</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/settings/manage-channels')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-fluid-sm font-semibold bg-brand-primary text-white hover:bg-brand-primary/90 transition-all active:scale-95 shadow-sm"
+                >
+                  <span>Manage</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between border-t border-border/60 pt-3">
               <div>
                 <p className="text-fluid-sm font-medium text-content-primary">Daily Screen Time Limit</p>

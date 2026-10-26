@@ -23,6 +23,7 @@ import {
   Loader2,
   Edit2,
   Check,
+  Tv2,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -285,6 +286,11 @@ export default function ProfilePage() {
                   setShowManageChildren(true);
                   setShowAddChild(false);
                 }}
+              />
+              <ProfileItem
+                icon={Tv2}
+                label="Manage Channels"
+                onClick={() => router.push('/settings/manage-channels')}
               />
               <ProfileItem
                 icon={Plus}

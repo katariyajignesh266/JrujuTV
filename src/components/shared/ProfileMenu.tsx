@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleUser, LogOut, Settings, Shield, ChevronDown, User } from 'lucide-react';
+import { CircleUser, LogOut, Settings, Shield, ChevronDown, User, Tv2 } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
@@ -118,14 +118,24 @@ export function ProfileMenu() {
               }}
             />
             {role === 'parent' && (
-              <MenuItem
-                icon={Shield}
-                label="Manage Children"
-                onClick={() => {
-                  setOpen(false);
-                  router.push('/profile');
-                }}
-              />
+              <>
+                <MenuItem
+                  icon={Shield}
+                  label="Manage Children"
+                  onClick={() => {
+                    setOpen(false);
+                    router.push('/profile');
+                  }}
+                />
+                <MenuItem
+                  icon={Tv2}
+                  label="Manage Channels"
+                  onClick={() => {
+                    setOpen(false);
+                    router.push('/settings/manage-channels');
+                  }}
+                />
+              </>
             )}
             <MenuItem
               icon={Settings}
