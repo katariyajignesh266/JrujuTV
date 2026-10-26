@@ -1,0 +1,55 @@
+name: Keep Render Alive
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Primary external pinger — runs every 5 minutes via GitHub Actions cron.
+# Hits the public Render URL to generate EXTERNAL inbound traffic, which
+# prevents Render's free-tier from sleeping (15-min inactivity timeout).
+#
+# SETUP:
+#   1. Go to repo → Settings → Secrets and variables → Actions → Variables tab
+#   2. Create a Repository Variable named RENDER_URL with value:
+#      https://jrujutv.onrender.com
+#   3. Push this file — the workflow runs automatically.
+#
+# NOTE: GitHub Actions cron can be delayed by up to 15 minutes under load.
+#       That's why this is paired with UptimeRobot + cron-job.org as primary
+#       external pingers. This workflow is a backup/tertiary layer.
+#
+# NOTE: GitHub auto-disables scheduled workflows after 60 days of repo
+#       inactivity. Push a commit or manually trigger this workflow to re-enable.
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # Every 5 minutes
+  workflow_dispatch: {}    # Manual trigger for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping health endpoint
+        env:
+          TARGET_URL: ${{ vars.RENDER_URL || 'https://jrujutv.onrender.com' }}
+        run: |
+          HEALTH_URL="${TARGET_URL}/api/health"
+          echo "🏥 Pinging ${HEALTH_URL} ..."
+
+          STATUS=$(curl -fsS -o /tmp/health_response.json -w "%{http_code}" \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 5 \
+            --retry-max-time 60 \
+            "${HEALTH_URL}")
+
+          echo "📡 HTTP status: ${STATUS}"
+          cat /tmp/health_response.json 2>/dev/null || true
+          echo ""
+
+          if [ "${STATUS}" -ne 200 ]; then
+            echo "::error::Health check FAILED — expected 200, got ${STATUS}"
+            exit 1
+          fi
+
+          echo "✅ Server is alive (status=${STATUS})"

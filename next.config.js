@@ -38,6 +38,16 @@ const nextConfig = {
       },
     ];
   },
+  // ── Keep-alive: top-level aliases for /api/health ──────────────────────────
+  // Render healthCheckPath and external monitors can use /health or /ping
+  // instead of the longer /api/health path.
+  async rewrites() {
+    return [
+      { source: '/health', destination: '/api/health' },
+      { source: '/ping', destination: '/api/health' },
+    ];
+  },
 };
 
 module.exports = nextConfig;
+

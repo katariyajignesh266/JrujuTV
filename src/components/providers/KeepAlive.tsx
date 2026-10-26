@@ -3,18 +3,23 @@
 import { useEffect } from 'react';
 
 /**
- * KeepAlive
+ * KeepAlive — SUPPLEMENTARY client-side pinger (active only while users browse)
  *
- * Invisible component — renders nothing in the UI.
+ * ⚠️  THIS COMPONENT CANNOT KEEP THE SERVER ALIVE ON ITS OWN.
+ * It runs in the user's BROWSER via React useEffect. When no browser tabs are
+ * open (overnight, weekends, etc.), this timer does not run and zero pings are
+ * sent. Render will sleep the service after 15 minutes of no traffic.
  *
- * Pings GET /api/health every 10 minutes to prevent the Render.com
- * free-tier service from going to sleep (Render's inactivity threshold is 15
- * minutes; we use 10 min to keep a 5-minute safety margin).
+ * The PRIMARY keep-alive mechanisms are:
+ *   1. External pingers (UptimeRobot, cron-job.org) — see KEEPALIVE.md
+ *   2. GitHub Actions cron — .github/workflows/keep-alive.yml
+ *   3. Server-side self-pinger — src/lib/keep-alive-server.ts
  *
- * Mount this once at the root layout so it stays alive for the entire session.
+ * This component is a BELT-AND-SUSPENDERS extra: while a user is actively
+ * browsing, it pings /api/health every 5 minutes to help prevent sleep.
  */
 
-const INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — supplementary to external pingers
 
 async function ping() {
   try {
@@ -35,7 +40,7 @@ async function ping() {
 
 export function KeepAlive() {
   useEffect(() => {
-    // Fire immediately on mount so the first 10-minute window starts now.
+    // Fire immediately on mount so the first 5-minute window starts now.
     ping();
 
     const id = setInterval(ping, INTERVAL_MS);

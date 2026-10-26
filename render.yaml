@@ -1,0 +1,62 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Render Blueprint — JruJu TV
+# https://render.com/docs/blueprint-spec
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# HOW TO USE:
+# 1. Push this file to the repo root.
+# 2. Go to https://dashboard.render.com → New → Blueprint → connect this repo.
+# 3. Render auto-detects render.yaml and creates/updates the service.
+#
+# ─── UPGRADE TO STARTER ($7/mo) — THE ONLY GUARANTEED NO-SLEEP FIX ──────────
+#
+# Render Free web services ALWAYS spin down after 15 minutes of no inbound
+# traffic. No amount of external pinging is 100% reliable.
+#
+# To guarantee 24/7 uptime with zero cold starts:
+#   Dashboard → JruJu TV service → Settings → Instance Type → Starter ($7/mo)
+#
+# Or change "plan: free" to "plan: starter" below and re-deploy.
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: jrujutv
+    runtime: node
+
+    # ── Plan ────────────────────────────────────────────────────────────────
+    # Change to "starter" ($7/mo) for guaranteed 24/7 uptime.
+    plan: free
+
+    # ── Build & Start ───────────────────────────────────────────────────────
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    # Next.js reads process.env.PORT automatically; Render sets PORT for you.
+
+    # Health Check
+    # Render pings this path after deploy to verify the service is healthy.
+    # Must return 200 within the timeout (default 30s).
+    healthCheckPath: /health
+
+    # ── Environment Variables ───────────────────────────────────────────────
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Supabase (set actual values in the Render dashboard — NOT here)
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+      # YouTube Data API (set actual value in the Render dashboard)
+      - key: YOUTUBE_API_KEY
+        sync: false
+
+      # Keep-alive self-pinger (set to "false" to disable)
+      - key: KEEP_ALIVE_ENABLED
+        value: "true"
+
+      # RENDER_EXTERNAL_URL is set automatically by Render — do NOT add it here.
+      # It provides the public URL (e.g. https://jrujutv.onrender.com) used by
+      # the server-side self-pinger.

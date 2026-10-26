@@ -13,7 +13,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public assets (icons, manifest, sw.js)
+     * - health & ping endpoints (keep-alive — must bypass auth)
      */
-    '/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|sw.js|(?:api/)?health|(?:api/)?ping|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
