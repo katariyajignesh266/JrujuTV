@@ -71,18 +71,23 @@ export function VideoCard({
       className={cn(
         'group flex gap-3',
         layout === 'grid' ? 'flex-col' : 'flex-row items-start',
-        'rounded-2xl overflow-hidden',
+        /* Item 2: Removed rounded-2xl — rectangular, edge-to-edge cards */
+        'overflow-hidden',
         'transition-all duration-200 hover:scale-[1.01]',
         'cursor-pointer'
       )}
       aria-label={isLoading ? 'Loading video' : `Video: ${activeTitle}`}
     >
-      {/* Thumbnail */}
+      {/* Thumbnail — Item 2: No rounding, no border. Item 3: bg-black prevents dark-mode bleed */}
       <div
         className={cn(
-          'relative aspect-video w-full rounded-2xl overflow-hidden bg-surface-secondary shrink-0 border border-border/40',
+          'relative aspect-video w-full overflow-hidden shrink-0',
+          /* Item 3 fix: Use bg-black instead of bg-surface-secondary to avoid visible
+             bleed-through on transparent image edges in dark mode. The old border-border/40
+             was the primary dark-mode artifact source — now removed entirely. */
+          'bg-black',
           layout === 'row' ? 'w-44 sm:w-56' : 'w-full',
-          isLoading && 'animate-pulse'
+          isLoading && 'animate-pulse bg-surface-secondary'
         )}
       >
         {activeThumb && !isLoading && (
@@ -106,7 +111,7 @@ export function VideoCard({
       </div>
 
       {/* Info */}
-      <div className={cn('flex gap-2.5 px-0.5 min-w-0 flex-1', layout === 'row' && 'py-1')}>
+      <div className={cn('flex gap-2.5 px-2 sm:px-0.5 min-w-0 flex-1', layout === 'row' && 'py-1')}>
         {/* Channel avatar */}
         {layout === 'grid' && (
           <div
@@ -169,7 +174,8 @@ export function VideoCard({
   }
 
   return (
-    <Link href={`/videos/${activeVideoId}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded-2xl">
+    /* Item 2: Removed rounded-2xl from the Link wrapper */
+    <Link href={`/videos/${activeVideoId}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
       {content}
     </Link>
   );

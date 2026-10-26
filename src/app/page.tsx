@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { PageShell } from '@/components/layout/PageShell';
 import { VideoCard, VideoCardSkeleton } from '@/components/cards/VideoCard';
@@ -20,10 +20,18 @@ export default function HomePage() {
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1000000));
   const [activeCategory, setActiveCategory] = useState('All');
 
-  const fetchFeed = async (pageNum: number = 1, append: boolean = false, currentSeed: number = seed) => {
+  /* Item 11: Infinite scroll — sentinel ref and IntersectionObserver */
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
+  const pageRef = useRef(1);
+  const seedRef = useRef(seed);
+
+  const fetchFeed = useCallback(async (pageNum: number = 1, append: boolean = false, currentSeed: number = seed) => {
     try {
       if (pageNum === 1) setLoading(true);
       else setLoadingMore(true);
+      loadingMoreRef.current = true;
 
       const res = await fetch(`/api/feed/home?page=${pageNum}&pageSize=20&seed=${currentSeed}`);
       const data = await res.json();
@@ -35,21 +43,48 @@ export default function HomePage() {
           setVideos(data.videos);
         }
         setHasMore(data.hasMore || false);
+        hasMoreRef.current = data.hasMore || false;
         setPage(pageNum);
+        pageRef.current = pageNum;
       }
     } catch (err) {
       console.error('Failed to load home feed:', err);
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      loadingMoreRef.current = false;
     }
-  };
+  }, [seed]);
+
+  useEffect(() => {
+    seedRef.current = seed;
+  }, [seed]);
 
   useEffect(() => {
     if (initialized) {
       fetchFeed(1, false, seed);
     }
-  }, [initialized, seed]);
+  }, [initialized, seed, fetchFeed]);
+
+  /* Item 11: IntersectionObserver to auto-load next page */
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && hasMoreRef.current && !loadingMoreRef.current) {
+          const nextPage = pageRef.current + 1;
+          fetchFeed(nextPage, true, seedRef.current);
+        }
+      },
+      { rootMargin: '0px 0px 400px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchFeed]);
 
   const handleRefresh = () => {
     const newSeed = Math.floor(Math.random() * 1000000);
@@ -90,10 +125,10 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Video Card Grid */}
+        {/* Video Card Grid — Item 2: Edge-to-edge on mobile via negative margin */}
         <section aria-label="Videos feed" className="mt-2">
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 gap-y-6">
+            <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6">
               <VideoCardSkeleton count={12} />
             </div>
           ) : filteredVideos.length === 0 ? (
@@ -122,36 +157,30 @@ export default function HomePage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 gap-y-6">
+            /* Item 2: -mx-3/4 bleeds thumbnails to screen edges on mobile.
+               gap-0 on mobile for true edge-to-edge, gap-4 on sm+ for card spacing. */
+            <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6">
               {filteredVideos.map((vid) => (
                 <VideoCard key={vid.id} video={vid} />
               ))}
             </div>
           )}
 
-          {/* Load More Pagination */}
-          {hasMore && !loading && (
-            <div className="pt-8 pb-4 flex justify-center">
-              <button
-                type="button"
-                onClick={() => fetchFeed(page + 1, true, seed)}
-                disabled={loadingMore}
-                className={cn(
-                  'px-6 py-2.5 rounded-2xl text-fluid-sm font-semibold',
-                  'bg-surface-secondary border border-border text-content-primary',
-                  'hover:bg-surface-elevated active:scale-95 transition-all disabled:opacity-50',
-                  'flex items-center gap-2'
-                )}
-              >
-                {loadingMore ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin text-brand-primary" />
-                    <span>Loading more videos…</span>
-                  </>
-                ) : (
-                  <span>Load More Videos</span>
-                )}
-              </button>
+          {/* Item 11: Infinite scroll sentinel + loading indicator */}
+          <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+
+          {loadingMore && (
+            <div className="pt-6 pb-4 flex justify-center">
+              <div className="flex items-center gap-2 text-content-secondary">
+                <Loader2 size={16} className="animate-spin text-brand-primary" />
+                <span className="text-fluid-sm">Loading more videos…</span>
+              </div>
+            </div>
+          )}
+
+          {!hasMore && !loading && videos.length > 0 && (
+            <div className="pt-6 pb-4 flex justify-center">
+              <p className="text-xs text-content-secondary">You&apos;ve reached the end of your feed</p>
             </div>
           )}
         </section>

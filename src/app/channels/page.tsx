@@ -72,7 +72,7 @@ export default function ChannelsPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6 pt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 grid-flow-row auto-rows-fr gap-4 sm:gap-6 pt-4">
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="flex flex-col items-center p-6 rounded-3xl bg-surface-secondary animate-pulse space-y-3">
                 <div className="h-20 w-20 rounded-full bg-surface-elevated" />
@@ -107,7 +107,7 @@ export default function ChannelsPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 grid-flow-row auto-rows-fr gap-4 sm:gap-6 pt-2">
             {channels.map((ch) => (
               <ChannelCard key={ch.id} channel={ch} variant="public" />
             ))}

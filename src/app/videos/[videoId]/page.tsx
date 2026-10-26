@@ -104,11 +104,12 @@ export default function VideoPlaybackPage({
         </div>
 
         {/* ── 1. The Custom YouTube-Redirect-Proof Player ── */}
-        <div className="w-full">
+        {/* Item 7: Negative margin to cancel PageShell padding — player touches screen edges */}
+        <div className="-mx-3 sm:-mx-4 md:-mx-6">
           {activeYtId ? (
             <YouTubePlayer videoId={activeYtId} title={video?.title} autoplay={true} />
           ) : (
-            <div className="w-full aspect-video rounded-3xl bg-surface-secondary animate-pulse flex items-center justify-center">
+            <div className="w-full aspect-video bg-surface-secondary animate-pulse flex items-center justify-center">
               <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
             </div>
           )}
@@ -117,7 +118,8 @@ export default function VideoPlaybackPage({
         {/* ── 2. Video Title & Channel Meta ── */}
         {video ? (
           <div className="space-y-4 pt-1">
-            <h1 className="font-display font-bold text-fluid-xl text-content-primary leading-snug">
+            {/* Item 10: Reduced from text-fluid-xl to text-fluid-lg for a more premium, less dominant look */}
+            <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
               {video.title}
             </h1>
 
@@ -167,7 +169,8 @@ export default function VideoPlaybackPage({
           </div>
         ) : !loading ? (
           <div className="space-y-4 pt-1">
-            <h1 className="font-display font-bold text-fluid-xl text-content-primary leading-snug">
+            {/* Item 10: Reduced from text-fluid-xl to text-fluid-lg */}
+            <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
               Curated Video Playback
             </h1>
             <div className="flex items-center justify-between p-4 rounded-3xl bg-surface-secondary border border-border">
