@@ -92,7 +92,7 @@ export default function ManageChannelsPage() {
             </Link>
             <button
               type="button"
-              onClick={() => openAuthModal('parent')}
+              onClick={() => openAuthModal()}
               className="px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-brand-primary text-white shadow-md shadow-brand-primary/20 hover:bg-brand-primary/90 active:scale-95 transition-all"
             >
               Log In as Parent
