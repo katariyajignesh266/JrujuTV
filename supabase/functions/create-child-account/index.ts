@@ -100,7 +100,8 @@ serve(async (req) => {
       email: syntheticEmail,
       password,
       email_confirm: true,
-      app_metadata: { role: 'child', parent_id: parentUser.id }
+      app_metadata: { role: 'child', parent_id: parentUser.id },
+      user_metadata: { username: lowerUsername, display_name: trimmedDisplayName }
     })
 
     if (authCreateError) {

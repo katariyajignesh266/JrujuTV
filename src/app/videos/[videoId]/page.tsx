@@ -1,24 +1,23 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Share2, Check, Sparkles, Tv2, Loader2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { YouTubePlayer } from '@/components/video/YouTubePlayer';
 import { VideoCard } from '@/components/cards/VideoCard';
 import { Video } from '@/types/content';
+import { useAuthStore } from '@/store/authStore';
+import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/cn';
 
 import { formatViewCount, formatRelativeTime, formatCompactNumber } from '@/lib/formatters';
 
-export default function VideoPlaybackPage({
-  params,
-}: {
-  params: Promise<{ videoId: string }>;
-}) {
-  const { videoId } = use(params);
+function VideoPlaybackContent({ videoId }: { videoId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { role, user, session } = useAuthStore();
 
   const [video, setVideo] = useState<Video | null>(null);
   const [channel, setChannel] = useState<any | null>(null);
@@ -26,6 +25,7 @@ export default function VideoPlaybackPage({
   const [upNext, setUpNext] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [startAt, setStartAt] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     let isMounted = true;
@@ -54,6 +54,41 @@ export default function VideoPlaybackPage({
       isMounted = false;
     };
   }, [videoId]);
+
+  // Handle resume position
+  useEffect(() => {
+    const resumeParam = searchParams.get('resume');
+    if (resumeParam) {
+      const parsed = parseInt(resumeParam, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        setStartAt(parsed);
+        return;
+      }
+    }
+
+    // If no URL resume param, fetch saved position for child viewers
+    if (role === 'child' && user?.id && video?.id) {
+      const fetchResume = async () => {
+        try {
+          const supabase = createClient();
+          const { data, error } = await supabase.rpc('get_child_watch_resume_position', {
+            p_child_id: user.id,
+            p_video_id: video.id,
+          });
+          if (!error && data && typeof (data as any).absolute_position === 'number') {
+            const pos = (data as any).absolute_position;
+            const pct = (data as any).progress_percent ?? 0;
+            if (pos > 5 && pct < 95) {
+              setStartAt(Math.floor(pos));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      };
+      fetchResume();
+    }
+  }, [searchParams, role, user?.id, video?.id]);
 
   const handleShare = async () => {
     if (typeof window !== 'undefined') {
@@ -94,10 +129,18 @@ export default function VideoPlaybackPage({
         </div>
 
         {/* ── 1. The Custom YouTube-Redirect-Proof Player ── */}
-        {/* Item 7: Negative margin to cancel PageShell padding — player touches screen edges */}
         <div className="-mx-3 sm:-mx-4 md:-mx-6">
           {activeYtId ? (
-            <YouTubePlayer videoId={activeYtId} title={video?.title} autoplay={true} />
+            <YouTubePlayer
+              videoId={activeYtId}
+              title={video?.title}
+              autoplay={true}
+              childId={role === 'child' ? user?.id : undefined}
+              videoDbId={video?.id}
+              channelId={video?.channel_id || channel?.id}
+              accessToken={session?.access_token}
+              startAt={startAt}
+            />
           ) : (
             <div className="w-full aspect-video bg-surface-secondary animate-pulse flex items-center justify-center">
               <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
@@ -108,7 +151,6 @@ export default function VideoPlaybackPage({
         {/* ── 2. Video Title & Channel Meta ── */}
         {video ? (
           <div className="space-y-4 pt-1">
-            {/* Item 10: Reduced from text-fluid-xl to text-fluid-lg for a more premium, less dominant look */}
             <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
               {video.title}
             </h1>
@@ -159,7 +201,6 @@ export default function VideoPlaybackPage({
           </div>
         ) : !loading ? (
           <div className="space-y-4 pt-1">
-            {/* Item 10: Reduced from text-fluid-xl to text-fluid-lg */}
             <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
               Curated Video Playback
             </h1>
@@ -226,5 +267,27 @@ export default function VideoPlaybackPage({
         )}
       </div>
     </PageShell>
+  );
+}
+
+export default function VideoPlaybackPage({
+  params,
+}: {
+  params: Promise<{ videoId: string }>;
+}) {
+  const { videoId } = use(params);
+
+  return (
+    <Suspense
+      fallback={
+        <PageShell>
+          <div className="max-w-6xl mx-auto space-y-6 pb-20">
+            <div className="w-full aspect-video bg-surface-secondary animate-pulse rounded-3xl" />
+          </div>
+        </PageShell>
+      }
+    >
+      <VideoPlaybackContent videoId={videoId} />
+    </Suspense>
   );
 }

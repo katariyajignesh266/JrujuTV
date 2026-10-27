@@ -6,6 +6,8 @@ import { PageShell } from '@/components/layout/PageShell';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import { createClient } from '@/lib/supabase/client';
+import { ChildProgressView } from '@/components/analytics/ChildProgressView';
+import { formatWatchDuration } from '@/lib/formatters';
 import {
   CircleUser,
   Shield,
@@ -24,6 +26,9 @@ import {
   Edit2,
   Check,
   Tv2,
+  BarChart2,
+  Clock,
+  ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -45,15 +50,27 @@ export default function ProfilePage() {
   const [showManageChildren, setShowManageChildren] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
 
+  // Child Detail panel (parent → clicking a child card)
+  const [detailChild, setDetailChild] = useState<ChildRecord | null>(null);
+
+  // Child's own "Your Progress" panel
+  const [showMyProgress, setShowMyProgress] = useState(false);
+
   // Children state
   const [childrenList, setChildrenList] = useState<ChildRecord[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
+
+  // Today's watch time map: { [child_id]: seconds }
+  const [todayMap, setTodayMap] = useState<Record<string, number>>({});
+  const [loadingToday, setLoadingToday] = useState(false);
 
   // Add child form state
   const [childUsername, setChildUsername] = useState('');
   const [childDisplayName, setChildDisplayName] = useState('');
   const [childPin, setChildPin] = useState('');
-  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [usernameStatus, setUsernameStatus] = useState<
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid'
+  >('idle');
   const [addChildLoading, setAddChildLoading] = useState(false);
   const [addChildError, setAddChildError] = useState<string | null>(null);
 
@@ -62,7 +79,7 @@ export default function ProfilePage() {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
-  // Fetch children for parent
+  // ── Fetch children for parent ─────────────────────────────────────────────
   const fetchChildren = useCallback(async () => {
     if (role !== 'parent' || !session) return;
     setLoadingChildren(true);
@@ -83,13 +100,45 @@ export default function ProfilePage() {
     }
   }, [role, session]);
 
+  // ── Fetch today's watch time for all children in one call ─────────────────
+  const fetchTodayWatchTimes = useCallback(async () => {
+    if (role !== 'parent' || !session) return;
+    setLoadingToday(true);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/get-children-today-summary`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, number> = {};
+        (data.today ?? []).forEach((item: { child_id: string; seconds: number }) => {
+          map[item.child_id] = item.seconds;
+        });
+        setTodayMap(map);
+      }
+    } catch {
+      // Non-critical; badges just show 0m
+    } finally {
+      setLoadingToday(false);
+    }
+  }, [role, session]);
+
   useEffect(() => {
     if (role === 'parent') {
       fetchChildren();
+      fetchTodayWatchTimes();
     }
-  }, [role, fetchChildren]);
+  }, [role, fetchChildren, fetchTodayWatchTimes]);
 
-  // Check username availability
+  // ── Username availability check ───────────────────────────────────────────
   const checkUsername = async (name: string) => {
     const trimmed = name.trim().toLowerCase();
     if (!trimmed || trimmed.length < 3) {
@@ -124,7 +173,7 @@ export default function ProfilePage() {
     }
   };
 
-  // Add child submission
+  // ── Add child ─────────────────────────────────────────────────────────────
   const handleAddChild = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session) return;
@@ -158,6 +207,7 @@ export default function ProfilePage() {
       }
 
       await fetchChildren();
+      await fetchTodayWatchTimes();
       setChildUsername('');
       setChildDisplayName('');
       setChildPin('');
@@ -171,7 +221,7 @@ export default function ProfilePage() {
     }
   };
 
-  // Delete child
+  // ── Delete child ──────────────────────────────────────────────────────────
   const handleDeleteChild = async (id: string, name: string) => {
     if (!window.confirm(`Are you sure you want to remove child account "${name}"?`)) {
       return;
@@ -181,13 +231,14 @@ export default function ProfilePage() {
       const { error } = await supabase.from('children').delete().eq('id', id);
       if (!error) {
         setChildrenList((prev) => prev.filter((c) => c.id !== id));
+        setTodayMap((prev) => { const m = { ...prev }; delete m[id]; return m; });
       }
     } catch (err) {
       console.error('Failed to remove child:', err);
     }
   };
 
-  // Save edited display name
+  // ── Save edited display name ──────────────────────────────────────────────
   const handleSaveEdit = async (id: string) => {
     if (!editDisplayName.trim()) return;
     setEditLoading(true);
@@ -211,6 +262,9 @@ export default function ProfilePage() {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // GUEST STATE
+  // ─────────────────────────────────────────────────────────────────────────
   if (isGuest) {
     return (
       <PageShell>
@@ -242,6 +296,9 @@ export default function ProfilePage() {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // MAIN PROFILE
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <PageShell>
       <div className="max-w-lg mx-auto pb-12">
@@ -275,7 +332,7 @@ export default function ProfilePage() {
 
         {/* Menu list */}
         <div className="space-y-4">
-          {/* Route Guard: Parent-only admin section */}
+          {/* ── Parent Admin Controls ──────────────────────────────────── */}
           {role === 'parent' && (
             <ProfileSection title="Admin Controls">
               <ProfileItem
@@ -303,13 +360,18 @@ export default function ProfilePage() {
             </ProfileSection>
           )}
 
-          {/* Child account details */}
+          {/* ── Child "Your Account" section ──────────────────────────── */}
           {role === 'child' && (
             <ProfileSection title="Your Account">
               <div className="p-4 space-y-2 text-fluid-sm">
                 <div className="flex justify-between items-center text-content-secondary">
                   <span>Username:</span>
-                  <span className="font-semibold text-content-primary">@{user?.username}</span>
+                  {/* BUG FIX: user_metadata.username is now correctly written by create-child-account.
+                      Falls back to children.username via the display_name field if still missing
+                      on very old accounts. */}
+                  <span className="font-semibold text-content-primary">
+                    @{user?.username ?? '…'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-content-secondary">
                   <span>Safe Mode:</span>
@@ -318,6 +380,12 @@ export default function ProfilePage() {
                   </span>
                 </div>
               </div>
+              {/* Your Progress entry */}
+              <ProfileItem
+                icon={BarChart2}
+                label="Your Progress"
+                onClick={() => setShowMyProgress(true)}
+              />
             </ProfileSection>
           )}
 
@@ -339,7 +407,9 @@ export default function ProfilePage() {
           </ProfileSection>
         </div>
 
-        {/* ── MODAL: MANAGE CHILDREN ── */}
+        {/* ══════════════════════════════════════════════════════════════════
+            MODAL: MANAGE CHILDREN
+            ══════════════════════════════════════════════════════════════════ */}
         {showManageChildren && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="relative w-full max-w-md bg-surface-elevated rounded-3xl border border-border p-6 shadow-xl animate-in zoom-in-95">
@@ -386,8 +456,20 @@ export default function ProfilePage() {
                   {childrenList.map((child) => (
                     <div
                       key={child.id}
-                      className="p-3.5 rounded-2xl bg-surface-secondary border border-border flex items-center justify-between gap-3"
+                      className={cn(
+                        'p-3.5 rounded-2xl bg-surface-secondary border border-border',
+                        'flex items-center gap-3',
+                        editingChildId !== child.id && 'cursor-pointer hover:bg-surface-elevated transition-colors'
+                      )}
+                      onClick={() => {
+                        if (editingChildId === child.id) return;
+                        setDetailChild(child);
+                        setShowManageChildren(false);
+                      }}
+                      role="button"
+                      aria-label={`View progress for ${child.display_name}`}
                     >
+                      {/* Left: Name + @username */}
                       <div className="flex-1 min-w-0">
                         {editingChildId === child.id ? (
                           <div className="flex items-center gap-2">
@@ -400,7 +482,7 @@ export default function ProfilePage() {
                             />
                             <button
                               type="button"
-                              onClick={() => handleSaveEdit(child.id)}
+                              onClick={(e) => { e.stopPropagation(); handleSaveEdit(child.id); }}
                               disabled={editLoading}
                               className="p-1.5 rounded-lg bg-brand-primary text-white"
                             >
@@ -408,7 +490,7 @@ export default function ProfilePage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setEditingChildId(null)}
+                              onClick={(e) => { e.stopPropagation(); setEditingChildId(null); }}
                               className="p-1.5 rounded-lg bg-surface-elevated text-content-secondary"
                             >
                               <X size={14} />
@@ -426,11 +508,23 @@ export default function ProfilePage() {
                         )}
                       </div>
 
+                      {/* Center: Today's watch time badge */}
+                      {editingChildId !== child.id && (
+                        <div className="flex items-center gap-1 shrink-0 px-2">
+                          <Clock size={11} className="text-content-disabled" />
+                          <span className="text-[11px] font-semibold text-content-secondary">
+                            {loadingToday ? '…' : formatWatchDuration(todayMap[child.id] ?? 0)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Right: Edit + Delete */}
                       <div className="flex items-center gap-1 shrink-0">
                         {editingChildId !== child.id && (
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditingChildId(child.id);
                               setEditDisplayName(child.display_name);
                             }}
@@ -442,7 +536,10 @@ export default function ProfilePage() {
                         )}
                         <button
                           type="button"
-                          onClick={() => handleDeleteChild(child.id, child.display_name)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteChild(child.id, child.display_name);
+                          }}
                           className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                           aria-label={`Delete ${child.display_name}`}
                         >
@@ -469,7 +566,9 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── MODAL: ADD CHILD ── */}
+        {/* ══════════════════════════════════════════════════════════════════
+            MODAL: ADD CHILD
+            ══════════════════════════════════════════════════════════════════ */}
         {showAddChild && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="relative w-full max-w-md bg-surface-elevated rounded-3xl border border-border p-6 shadow-xl animate-in zoom-in-95">
@@ -590,10 +689,113 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            MODAL: CHILD DETAIL PANEL (parent views a child's progress)
+            Opens on card tap in Manage Children. Uses the shared ChildProgressView.
+            ══════════════════════════════════════════════════════════════════ */}
+        {detailChild && session && (
+          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div
+              className={cn(
+                'relative w-full sm:max-w-md bg-surface-elevated border border-border shadow-xl',
+                'rounded-t-3xl sm:rounded-3xl',
+                'max-h-[92dvh] flex flex-col',
+                'animate-in slide-in-from-bottom sm:zoom-in-95 duration-200'
+              )}
+            >
+              {/* Panel header */}
+              <div className="flex items-center gap-3 p-5 border-b border-border shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailChild(null);
+                    setShowManageChildren(true);
+                  }}
+                  className="p-1.5 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  aria-label="Back to Manage Children"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-content-primary text-fluid-base truncate">
+                    {detailChild.display_name}
+                  </p>
+                  <p className="text-[11px] text-content-secondary">@{detailChild.username}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailChild(null)}
+                  className="p-1.5 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scrollable content */}
+              <div className="overflow-y-auto flex-1 p-5">
+                <ChildProgressView
+                  childId={detailChild.id}
+                  viewerRole="parent"
+                  accessToken={session.access_token}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            MODAL: CHILD'S OWN "YOUR PROGRESS" VIEW
+            Uses the SAME ChildProgressView component, scoped to the logged-in
+            child's own data — no parent-only actions.
+            ══════════════════════════════════════════════════════════════════ */}
+        {showMyProgress && session && role === 'child' && (
+          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div
+              className={cn(
+                'relative w-full sm:max-w-md bg-surface-elevated border border-border shadow-xl',
+                'rounded-t-3xl sm:rounded-3xl',
+                'max-h-[92dvh] flex flex-col',
+                'animate-in slide-in-from-bottom sm:zoom-in-95 duration-200'
+              )}
+            >
+              {/* Panel header */}
+              <div className="flex items-center gap-3 p-5 border-b border-border shrink-0">
+                <div className="h-8 w-8 rounded-full flex items-center justify-center bg-brand-tertiary/15">
+                  <BarChart2 size={16} className="text-brand-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-content-primary text-fluid-base">Your Progress</p>
+                  <p className="text-[11px] text-content-secondary">@{user?.username ?? '…'}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMyProgress(false)}
+                  className="p-1.5 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  aria-label="Close Your Progress"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scrollable content */}
+              <div className="overflow-y-auto flex-1 p-5">
+                <ChildProgressView
+                  childId={user!.id}
+                  viewerRole="child"
+                  accessToken={session.access_token}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </PageShell>
   );
 }
+
+// ─── Shared Sub-components ────────────────────────────────────────────────────
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -648,4 +850,3 @@ function ProfileItem({
     </button>
   );
 }
-

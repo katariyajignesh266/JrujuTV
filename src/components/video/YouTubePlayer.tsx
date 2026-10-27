@@ -24,6 +24,11 @@ interface YouTubePlayerProps {
   title?: string;
   autoplay?: boolean;
   onEnded?: () => void;
+  childId?: string;
+  videoDbId?: string;
+  channelId?: string;
+  accessToken?: string;
+  startAt?: number;
 }
 
 function formatTime(seconds: number): string {
@@ -43,12 +48,25 @@ export function YouTubePlayer({
   title,
   autoplay = true,
   onEnded,
+  childId,
+  videoDbId,
+  channelId,
+  accessToken,
+  startAt,
 }: YouTubePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hideControlsTimer = useRef<NodeJS.Timeout | null>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+
+  // Heartbeat tracking refs
+  const accumulatedSecondsRef = useRef<number>(0);
+  const latestPropsRef = useRef({ childId, videoDbId, channelId, accessToken });
+
+  useEffect(() => {
+    latestPropsRef.current = { childId, videoDbId, channelId, accessToken };
+  }, [childId, videoDbId, channelId, accessToken]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
@@ -81,6 +99,69 @@ export function YouTubePlayer({
   const handleInteraction = () => {
     scheduleHideControls();
   };
+
+  // Heartbeat flush function
+  const flushHeartbeat = useCallback(() => {
+    const { childId: cid, videoDbId: vid, channelId: chid, accessToken: token } = latestPropsRef.current;
+    if (!cid || !vid || !chid || !token) return;
+
+    const delta = Math.floor(accumulatedSecondsRef.current);
+    if (delta < 1) return;
+
+    accumulatedSecondsRef.current = 0;
+
+    const currentTimeVal = playerRef.current?.getCurrentTime?.() ?? 0;
+    const durationVal = playerRef.current?.getDuration?.() ?? 0;
+
+    const payload = {
+      video_id: vid,
+      channel_id: chid,
+      delta_seconds: delta,
+      absolute_position: typeof currentTimeVal === 'number' ? currentTimeVal : 0,
+      video_duration: typeof durationVal === 'number' ? Math.floor(durationVal) : 0,
+      beat_timestamp: new Date().toISOString(),
+    };
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+    const url = `${supabaseUrl}/functions/v1/record-watch-progress`;
+
+    try {
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch((err) => {
+        console.debug('Heartbeat flush error:', err);
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Flush on tab hide or page unload
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushHeartbeat();
+      }
+    };
+    const handleBeforeUnload = () => {
+      flushHeartbeat();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      flushHeartbeat();
+    };
+  }, [flushHeartbeat]);
 
   // Load YouTube IFrame API script
   useEffect(() => {
@@ -137,6 +218,7 @@ export function YouTubePlayer({
         enablejsapi: 1,
         playsinline: 1,
         origin: typeof window !== 'undefined' ? window.location.origin : '',
+        ...(startAt && startAt > 0 ? { start: Math.floor(startAt) } : {}),
       },
       events: {
         onReady: (event: any) => {
@@ -144,6 +226,13 @@ export function YouTubePlayer({
           playerRef.current = event.target;
           const dur = event.target.getDuration();
           if (dur) setDuration(dur);
+          if (startAt && startAt > 0) {
+            try {
+              event.target.seekTo(startAt, true);
+            } catch {
+              // ignore
+            }
+          }
           setIsBuffering(false);
           if (autoplay) {
             event.target.playVideo();
@@ -160,12 +249,14 @@ export function YouTubePlayer({
             setIsPlaying(false);
             setIsBuffering(false);
             setShowControls(true);
+            flushHeartbeat();
           } else if (event.data === 3) {
             setIsBuffering(true);
           } else if (event.data === 0) {
             setIsPlaying(false);
             setIsBuffering(false);
             setShowControls(true);
+            flushHeartbeat();
             if (onEnded) onEnded();
           }
         },
@@ -180,6 +271,7 @@ export function YouTubePlayer({
 
     return () => {
       isMounted = false;
+      flushHeartbeat();
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
@@ -188,7 +280,7 @@ export function YouTubePlayer({
         }
       }
     };
-  }, [isApiReady, videoId, autoplay, onEnded, scheduleHideControls]);
+  }, [isApiReady, videoId, autoplay, onEnded, scheduleHideControls, startAt, flushHeartbeat]);
 
   // Polling current playback time — Item 8: reduced to 100ms for smoother progress bar
   useEffect(() => {
@@ -198,13 +290,21 @@ export function YouTubePlayer({
         if (typeof time === 'number') setCurrentTime(time);
         const dur = playerRef.current.getDuration();
         if (typeof dur === 'number' && dur > 0) setDuration(dur);
+
+        // Heartbeat accumulation: only when player state is playing (1)
+        if (playerRef.current.getPlayerState?.() === 1) {
+          accumulatedSecondsRef.current += 0.1;
+          if (accumulatedSecondsRef.current >= 10) {
+            flushHeartbeat();
+          }
+        }
       }
     }, 100);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isSeeking]);
+  }, [isSeeking, flushHeartbeat]);
 
   // Fullscreen change listener — handles both standard API and rotation fallback
   useEffect(() => {
@@ -226,6 +326,7 @@ export function YouTubePlayer({
   /* ── Item 9: Skip ±10s ── */
   const skipTime = (delta: number) => {
     if (!playerRef.current) return;
+    flushHeartbeat();
     const newTime = Math.max(0, Math.min(duration, currentTime + delta));
     setCurrentTime(newTime);
     playerRef.current.seekTo(newTime, true);
@@ -266,6 +367,7 @@ export function YouTubePlayer({
   };
 
   const handleSeekStart = (clientX: number) => {
+    flushHeartbeat();
     setIsSeeking(true);
     const time = getSeekPositionFromEvent(clientX);
     setSeekPreview(time);

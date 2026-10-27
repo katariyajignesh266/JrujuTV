@@ -97,6 +97,37 @@ export function formatRelativeTime(dateInput?: string | Date | null): string {
 }
 
 /**
+ * Format watch-time seconds for dashboard display.
+ * Examples:
+ *   0   -> "0m"
+ *   45  -> "<1m"
+ *   90  -> "1m"
+ *   3600 -> "1h 0m"
+ *   5400 -> "1h 30m"
+ */
+export function formatWatchDuration(totalSeconds: number): string {
+  if (!totalSeconds || totalSeconds < 0) return '0m';
+  const s = Math.floor(totalSeconds);
+  if (s < 60) return s > 0 ? '<1m' : '0m';
+  const minutes = Math.floor(s / 60);
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours > 0) return `${hours}h ${remainingMinutes}m`;
+  return `${minutes}m`;
+}
+
+/**
+ * Format seconds to a compact hours display (e.g. "2.4h") for bar charts.
+ */
+export function formatHours(totalSeconds: number): string {
+  if (!totalSeconds || totalSeconds <= 0) return '0h';
+  const hours = totalSeconds / 3600;
+  if (hours < 0.1) return '<0.1h';
+  if (hours < 10) return `${hours.toFixed(1)}h`;
+  return `${Math.round(hours)}h`;
+}
+
+/**
  * Format video duration in seconds to standard MM:SS or HH:MM:SS format.
  * Examples:
  *   65 -> "1:05"

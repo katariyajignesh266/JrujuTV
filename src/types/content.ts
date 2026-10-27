@@ -64,3 +64,37 @@ export interface FeedResponse {
   hasMore: boolean;
   seed: number;
 }
+
+export interface WatchSession {
+  id: string;
+  video_id: string;
+  channel_id: string;
+  watched_seconds: number;
+  video_duration_seconds: number;
+  progress_percent: number;
+  absolute_position: number;
+  last_watched_at: string;
+  video_title?: string;
+  video_thumbnail?: string;
+  channel_name?: string;
+}
+
+export interface ChannelWatchStat {
+  channel_id: string;
+  channel_name: string;
+  channel_thumbnail?: string;
+  total_seconds: number;
+}
+
+export interface ChildWatchSummary {
+  lifetime_seconds: number;
+  today_seconds: number;
+  top_channels: ChannelWatchStat[];
+  total_channel_count: number;
+}
+
+export interface ChildTodayWatchItem {
+  child_id: string;
+  seconds: number;
+}
+
