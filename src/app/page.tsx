@@ -10,7 +10,7 @@ import { Tv2, Plus, Loader2, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { Video } from '@/types/content';
 import { cn } from '@/lib/cn';
-import { useLookAheadPagination } from '@/hooks/useLookAheadPagination';
+
 
 export default function HomePage() {
   const { role, initialized } = useAuthStore();
@@ -21,6 +21,7 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(false);
   const [allChannelsSynced, setAllChannelsSynced] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Session-stable shuffle seed: persistent within the browser session, fresh on new tab/session
   const [seed, setSeed] = useState<number>(() => {
@@ -74,9 +75,11 @@ export default function HomePage() {
           nextCursorRef.current = data.nextCursor || null;
           setPage(pageNum);
           pageRef.current = pageNum;
+          setFetchError(null);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load home feed:', err);
+        setFetchError(err?.message || 'Failed to load videos. Tap to retry.');
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -96,22 +99,14 @@ export default function HomePage() {
     }
   }, [initialized, seed, fetchFeed]);
 
-  // Predictive look-ahead pagination: triggers next page fetch when user approaches
-  // the 4th-from-last item in the currently rendered list (600px margin)
+  // Pagination callback — triggered by VirtualizedVideoGrid's built-in
+  // scroll-position-aware detection when the user approaches the end of loaded content
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
+    setFetchError(null);
     const nextPage = pageRef.current + 1;
     fetchFeed(nextPage, true, seedRef.current, nextCursorRef.current);
   }, [loadingMore, hasMore, fetchFeed]);
-
-  const { sentinelIndex, attachSentinel } = useLookAheadPagination({
-    itemCount: videos.length,
-    hasMore,
-    isLoading: loadingMore,
-    lookAheadOffset: 4,
-    rootMargin: '600px 0px',
-    onLoadMore: handleLoadMore,
-  });
 
   const handleRefresh = () => {
     const newSeed = Math.floor(Math.random() * 1000000);
@@ -195,8 +190,9 @@ export default function HomePage() {
           ) : (
             <VirtualizedVideoGrid
               videos={filteredVideos}
-              sentinelIndex={sentinelIndex}
-              attachSentinel={attachSentinel}
+              onLoadMore={handleLoadMore}
+              hasMore={hasMore}
+              isLoading={loadingMore}
             />
           )}
 
@@ -207,6 +203,36 @@ export default function HomePage() {
                 <Loader2 size={16} className="animate-spin text-brand-primary" />
                 <span className="text-fluid-sm">Loading more videos…</span>
               </div>
+            </div>
+          )}
+
+          {/* Fetch error with retry (Fix 4.4) */}
+          {fetchError && !loading && !loadingMore && (
+            <div className="pt-6 pb-4 flex flex-col items-center gap-3">
+              <p className="text-fluid-sm text-red-500 dark:text-red-400 font-medium">
+                {fetchError}
+              </p>
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all"
+              >
+                <RefreshCw size={14} />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
+
+          {/* Manual load-more fallback — visible when auto-pagination hasn't triggered (Fix 4.4) */}
+          {hasMore && !loadingMore && !loading && !fetchError && (
+            <div className="pt-4 pb-2 flex justify-center">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-surface-secondary border border-border text-content-secondary hover:border-brand-primary/50 hover:text-brand-primary active:scale-95 transition-all"
+              >
+                <span>Load More Videos</span>
+              </button>
             </div>
           )}
 

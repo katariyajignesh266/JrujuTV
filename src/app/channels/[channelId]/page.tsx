@@ -11,7 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import { Channel, Video } from '@/types/content';
 import { syncChannel } from '@/lib/api/channels';
 import { cn } from '@/lib/cn';
-import { useLookAheadPagination } from '@/hooks/useLookAheadPagination';
+
 import { formatCompactNumber } from '@/lib/formatters';
 
 export default function ChannelDetailPage({
@@ -28,6 +28,7 @@ export default function ChannelDetailPage({
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const pageRef = useRef(1);
   const nextCursorRef = useRef<{ published_at: string; id: string } | null>(null);
@@ -66,8 +67,10 @@ export default function ChannelDetailPage({
         setHasMore(Boolean(data.hasMore));
         nextCursorRef.current = data.nextCursor || null;
         pageRef.current = pageNum;
-      } catch (err) {
+        setFetchError(null);
+      } catch (err: any) {
         console.error('Failed to load channel videos:', err);
+        setFetchError(err?.message || 'Failed to load videos. Tap to retry.');
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -84,21 +87,14 @@ export default function ChannelDetailPage({
     }
   }, [channelId, fetchChannelVideos]);
 
-  // Predictive look-ahead pagination
+  // Pagination callback — triggered by VirtualizedVideoGrid's built-in
+  // scroll-position-aware detection when the user approaches the end of loaded content
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
+    setFetchError(null);
     const nextPage = pageRef.current + 1;
     fetchChannelVideos(nextPage, true, nextCursorRef.current);
   }, [loadingMore, hasMore, fetchChannelVideos]);
-
-  const { sentinelIndex, attachSentinel } = useLookAheadPagination({
-    itemCount: videos.length,
-    hasMore,
-    isLoading: loadingMore,
-    lookAheadOffset: 4,
-    rootMargin: '600px 0px',
-    onLoadMore: handleLoadMore,
-  });
 
   const handleManualSync = async () => {
     if (!channel) return;
@@ -274,8 +270,9 @@ export default function ChannelDetailPage({
           ) : (
             <VirtualizedVideoGrid
               videos={videos}
-              sentinelIndex={sentinelIndex}
-              attachSentinel={attachSentinel}
+              onLoadMore={handleLoadMore}
+              hasMore={hasMore}
+              isLoading={loadingMore}
             />
           )}
 
@@ -286,6 +283,36 @@ export default function ChannelDetailPage({
                 <Loader2 size={16} className="animate-spin text-brand-primary" />
                 <span className="text-fluid-sm">Loading more videos…</span>
               </div>
+            </div>
+          )}
+
+          {/* Fetch error with retry (Fix 4.4) */}
+          {fetchError && !loading && !loadingMore && (
+            <div className="pt-6 pb-4 flex flex-col items-center gap-3">
+              <p className="text-fluid-sm text-red-500 dark:text-red-400 font-medium">
+                {fetchError}
+              </p>
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all"
+              >
+                <RefreshCw size={14} />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
+
+          {/* Manual load-more fallback — visible when auto-pagination hasn't triggered (Fix 4.4) */}
+          {hasMore && !loadingMore && !loading && !fetchError && (
+            <div className="pt-4 pb-2 flex justify-center">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-surface-secondary border border-border text-content-secondary hover:border-brand-primary/50 hover:text-brand-primary active:scale-95 transition-all"
+              >
+                <span>Load More Videos</span>
+              </button>
             </div>
           )}
 

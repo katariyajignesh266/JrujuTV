@@ -9,19 +9,51 @@ import { cn } from '@/lib/cn';
 
 interface VirtualizedVideoGridProps {
   videos: Video[];
-  sentinelIndex?: number;
-  attachSentinel?: (index: number) => (node: HTMLElement | null) => void;
+  /** Callback to load the next page of results */
+  onLoadMore?: () => void | Promise<void>;
+  /** Whether more pages are available */
+  hasMore?: boolean;
+  /** Whether a fetch is currently in progress */
+  isLoading?: boolean;
+  /** How many rows from the end should trigger the look-ahead fetch (default: 2) */
+  lookAheadOffset?: number;
   className?: string;
 }
 
 export function VirtualizedVideoGrid({
   videos,
-  sentinelIndex,
-  attachSentinel,
+  onLoadMore,
+  hasMore = false,
+  isLoading = false,
+  lookAheadOffset = 2,
   className,
 }: VirtualizedVideoGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(1);
+  const inFlightRef = useRef(false);
+  const onLoadMoreRef = useRef(onLoadMore);
+  const loadMoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep onLoadMore ref in sync to avoid stale closures in the trigger effect
+  useEffect(() => {
+    onLoadMoreRef.current = onLoadMore;
+  }, [onLoadMore]);
+
+  // Reset inFlight guard when loading completes
+  useEffect(() => {
+    if (!isLoading) {
+      inFlightRef.current = false;
+    }
+  }, [isLoading]);
+
+  // Cleanup safety timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadMoreTimeoutRef.current) {
+        clearTimeout(loadMoreTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Responsive column calculation matching Tailwind breakpoints:
   // sm: 640px (2 cols), lg: 1024px (3 cols), xl: 1280px (4 cols), 2xl: 1536px (5 cols)
@@ -65,11 +97,59 @@ export function VirtualizedVideoGrid({
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
     estimateSize: () => estimatedRowHeight,
-    overscan: 2,
+    overscan: 3,
     scrollMargin: containerRef.current?.offsetTop ?? 0,
   });
 
   const virtualItems = virtualizer.getVirtualItems();
+
+  // Derive the last rendered row index as a stable primitive for the effect dependency.
+  // This avoids re-running the effect on every virtualItems array reference change.
+  const lastRenderedRowIndex =
+    virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
+
+  // ── Virtualizer-aware load-more trigger ──────────────────────────────────────
+  // Instead of observing a DOM sentinel element (which virtualization may unmount),
+  // we check whether the last rendered virtual row is within `lookAheadOffset`
+  // rows of the total row count. This is a pure state/index check that works
+  // reliably regardless of which DOM nodes are currently mounted.
+  useEffect(() => {
+    if (!hasMore || isLoading || inFlightRef.current) return;
+    if (lastRenderedRowIndex < 0 || rows.length === 0) return;
+    if (!onLoadMoreRef.current) return;
+
+    if (lastRenderedRowIndex >= rows.length - lookAheadOffset - 1) {
+      inFlightRef.current = true;
+
+      // Safety timeout: if the fetch hasn't completed in 15 seconds, force-reset
+      // the guard so the user isn't permanently stuck (Fix 4.2)
+      if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
+      loadMoreTimeoutRef.current = setTimeout(() => {
+        inFlightRef.current = false;
+      }, 15000);
+
+      try {
+        const result = onLoadMoreRef.current();
+        // Handle async onLoadMore: reset guard on completion
+        if (result && typeof result.then === 'function') {
+          result.catch(() => {}).finally(() => {
+            inFlightRef.current = false;
+            if (loadMoreTimeoutRef.current) {
+              clearTimeout(loadMoreTimeoutRef.current);
+              loadMoreTimeoutRef.current = null;
+            }
+          });
+        }
+      } catch {
+        // Synchronous throw: reset guard immediately
+        inFlightRef.current = false;
+        if (loadMoreTimeoutRef.current) {
+          clearTimeout(loadMoreTimeoutRef.current);
+          loadMoreTimeoutRef.current = null;
+        }
+      }
+    }
+  }, [lastRenderedRowIndex, rows.length, hasMore, isLoading, lookAheadOffset]);
 
   return (
     <div
@@ -83,7 +163,6 @@ export function VirtualizedVideoGrid({
         const rowVideos = rows[virtualRow.index];
         if (!rowVideos) return null;
 
-        const rowStartIdx = virtualRow.index * columns;
         const translateY = virtualRow.start - virtualizer.options.scrollMargin;
 
         return (
@@ -98,24 +177,11 @@ export function VirtualizedVideoGrid({
           >
             {/* Grid container preserving existing edge-to-edge mobile & spacing */}
             <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6 pb-6">
-              {rowVideos.map((video, colIdx) => {
-                const globalIndex = rowStartIdx + colIdx;
-                const isSentinel = sentinelIndex !== undefined && globalIndex === sentinelIndex;
-
-                return (
-                  <div
-                    key={video.id}
-                    ref={
-                      isSentinel && attachSentinel
-                        ? attachSentinel(globalIndex)
-                        : undefined
-                    }
-                    className="w-full"
-                  >
-                    <VideoCard video={video} />
-                  </div>
-                );
-              })}
+              {rowVideos.map((video) => (
+                <div key={video.id} className="w-full">
+                  <VideoCard video={video} />
+                </div>
+              ))}
             </div>
           </div>
         );
