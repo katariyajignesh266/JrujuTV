@@ -131,6 +131,9 @@ export function YouTubePlayer({
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+            ? { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY }
+            : {}),
         },
         body: JSON.stringify(payload),
         keepalive: true,

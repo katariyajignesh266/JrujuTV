@@ -134,10 +134,14 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
-  const authHeaders = {
+  const authHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${accessToken}`,
   };
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (anonKey) {
+    authHeaders['apikey'] = anonKey;
+  }
 
   // ── Fetch summary (lifetime + today + top-5 channels) ─────────────────────
   useEffect(() => {
@@ -151,12 +155,12 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
           headers: authHeaders,
           body: JSON.stringify({ child_id: childId }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (!cancelled) {
-          if (res.ok) {
+          if (res.ok && data) {
             setSummary(data);
           } else {
-            setSummaryError(data.error ?? 'Failed to load summary');
+            setSummaryError(data?.error ?? 'Failed to load summary');
           }
         }
       } catch {
@@ -181,13 +185,13 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
         headers: authHeaders,
         body: JSON.stringify({ child_id: childId, limit: 30, cursor: cursorArg }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
         setSessions((prev) => cursorArg ? [...prev, ...data.sessions] : data.sessions);
         setHasMore(data.has_more ?? false);
         setCursor(data.next_cursor ?? null);
       } else {
-        setHistoryError(data.error ?? 'Failed to load history');
+        setHistoryError(data?.error ?? 'Failed to load history');
       }
     } catch {
       setHistoryError('Network error');
@@ -238,8 +242,8 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
         headers: authHeaders,
         body: JSON.stringify({ child_id: childId }),
       });
-      const data = await res.json();
-      if (res.ok) setAllChannels(data.channels ?? []);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) setAllChannels(data.channels ?? []);
     } catch {
       // fail silently — user can retry by tapping again
     } finally {
