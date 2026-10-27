@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { PageShell } from '@/components/layout/PageShell';
-import { VideoCard, VideoCardSkeleton } from '@/components/cards/VideoCard';
+import { VideoCardSkeleton } from '@/components/cards/VideoCard';
+import { VirtualizedVideoGrid } from '@/components/video/VirtualizedVideoGrid';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { Tv2, Plus, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Tv2, Plus, Loader2, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { Video } from '@/types/content';
 import { cn } from '@/lib/cn';
+import { useLookAheadPagination } from '@/hooks/useLookAheadPagination';
 
 export default function HomePage() {
   const { role, initialized } = useAuthStore();
@@ -17,44 +19,69 @@ export default function HomePage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1000000));
   const [activeCategory, setActiveCategory] = useState('All');
 
-  /* Item 11: Infinite scroll — sentinel ref and IntersectionObserver */
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const loadingMoreRef = useRef(false);
-  const hasMoreRef = useRef(false);
+  // Session-stable shuffle seed: persistent within the browser session, fresh on new tab/session
+  const [seed, setSeed] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('jruju_feed_seed');
+      if (stored) return parseInt(stored, 10);
+      const generated = Math.floor(Math.random() * 1000000);
+      sessionStorage.setItem('jruju_feed_seed', generated.toString());
+      return generated;
+    }
+    return 42;
+  });
+
+  const nextCursorRef = useRef<string | null>(null);
   const pageRef = useRef(1);
   const seedRef = useRef(seed);
 
-  const fetchFeed = useCallback(async (pageNum: number = 1, append: boolean = false, currentSeed: number = seed) => {
-    try {
-      if (pageNum === 1) setLoading(true);
-      else setLoadingMore(true);
-      loadingMoreRef.current = true;
+  const fetchFeed = useCallback(
+    async (
+      pageNum: number = 1,
+      append: boolean = false,
+      currentSeed: number = seedRef.current,
+      cursor: string | null = null
+    ) => {
+      try {
+        if (pageNum === 1) setLoading(true);
+        else setLoadingMore(true);
 
-      const res = await fetch(`/api/feed/home?page=${pageNum}&pageSize=20&seed=${currentSeed}`);
-      const data = await res.json();
-
-      if (data.videos) {
-        if (append) {
-          setVideos((prev) => [...prev, ...data.videos]);
-        } else {
-          setVideos(data.videos);
+        let url = `/api/feed/home?page=${pageNum}&pageSize=20&seed=${currentSeed}`;
+        if (cursor) {
+          url += `&cursor=${encodeURIComponent(cursor)}`;
         }
-        setHasMore(data.hasMore || false);
-        hasMoreRef.current = data.hasMore || false;
-        setPage(pageNum);
-        pageRef.current = pageNum;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.videos) {
+          if (append) {
+            setVideos((prev) => {
+              // Deduplicate any video already in state by id
+              const existingIds = new Set(prev.map((v) => v.id));
+              const newItems = data.videos.filter((v: Video) => !existingIds.has(v.id));
+              return [...prev, ...newItems];
+            });
+          } else {
+            setVideos(data.videos);
+          }
+
+          setHasMore(Boolean(data.hasMore));
+          nextCursorRef.current = data.nextCursor || null;
+          setPage(pageNum);
+          pageRef.current = pageNum;
+        }
+      } catch (err) {
+        console.error('Failed to load home feed:', err);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-    } catch (err) {
-      console.error('Failed to load home feed:', err);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      loadingMoreRef.current = false;
-    }
-  }, [seed]);
+    },
+    []
+  );
 
   useEffect(() => {
     seedRef.current = seed;
@@ -62,49 +89,56 @@ export default function HomePage() {
 
   useEffect(() => {
     if (initialized) {
-      fetchFeed(1, false, seed);
+      nextCursorRef.current = null;
+      fetchFeed(1, false, seed, null);
     }
   }, [initialized, seed, fetchFeed]);
 
-  /* Item 11: IntersectionObserver to auto-load next page */
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+  // Predictive look-ahead pagination: triggers next page fetch when user approaches
+  // the 4th-from-last item in the currently rendered list (600px margin)
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    const nextPage = pageRef.current + 1;
+    fetchFeed(nextPage, true, seedRef.current, nextCursorRef.current);
+  }, [loadingMore, hasMore, fetchFeed]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && hasMoreRef.current && !loadingMoreRef.current) {
-          const nextPage = pageRef.current + 1;
-          fetchFeed(nextPage, true, seedRef.current);
-        }
-      },
-      { rootMargin: '0px 0px 400px 0px' }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [fetchFeed]);
+  const { sentinelIndex, attachSentinel } = useLookAheadPagination({
+    itemCount: videos.length,
+    hasMore,
+    isLoading: loadingMore,
+    lookAheadOffset: 4,
+    rootMargin: '600px 0px',
+    onLoadMore: handleLoadMore,
+  });
 
   const handleRefresh = () => {
     const newSeed = Math.floor(Math.random() * 1000000);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('jruju_feed_seed', newSeed.toString());
+    }
     setSeed(newSeed);
   };
 
   // Filter by category chip with smart stem matching (e.g. Stories -> Story, Bhajans -> Bhajan)
-  const filteredVideos = activeCategory === 'All'
-    ? videos
-    : videos.filter((v) => {
-        const lowerCat = activeCategory.toLowerCase();
-        const stem = lowerCat.endsWith('ies')
-          ? lowerCat.slice(0, -3) + 'y'
-          : lowerCat.endsWith('s')
-          ? lowerCat.slice(0, -1)
-          : lowerCat;
-        const title = v.title.toLowerCase();
-        const ch = (v.channelName || '').toLowerCase();
-        return title.includes(lowerCat) || title.includes(stem) || ch.includes(lowerCat) || ch.includes(stem);
-      });
+  const filteredVideos =
+    activeCategory === 'All'
+      ? videos
+      : videos.filter((v) => {
+          const lowerCat = activeCategory.toLowerCase();
+          const stem = lowerCat.endsWith('ies')
+            ? lowerCat.slice(0, -3) + 'y'
+            : lowerCat.endsWith('s')
+            ? lowerCat.slice(0, -1)
+            : lowerCat;
+          const title = v.title.toLowerCase();
+          const ch = (v.channelName || '').toLowerCase();
+          return (
+            title.includes(lowerCat) ||
+            title.includes(stem) ||
+            ch.includes(lowerCat) ||
+            ch.includes(stem)
+          );
+        });
 
   return (
     <PageShell>
@@ -125,7 +159,7 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Video Card Grid — Item 2: Edge-to-edge on mobile via negative margin */}
+        {/* Video Card Grid — Virtualized with look-ahead pagination */}
         <section aria-label="Videos feed" className="mt-2">
           {loading ? (
             <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6">
@@ -157,18 +191,14 @@ export default function HomePage() {
               </div>
             </div>
           ) : (
-            /* Item 2: -mx-3/4 bleeds thumbnails to screen edges on mobile.
-               gap-0 on mobile for true edge-to-edge, gap-4 on sm+ for card spacing. */
-            <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6">
-              {filteredVideos.map((vid) => (
-                <VideoCard key={vid.id} video={vid} />
-              ))}
-            </div>
+            <VirtualizedVideoGrid
+              videos={filteredVideos}
+              sentinelIndex={sentinelIndex}
+              attachSentinel={attachSentinel}
+            />
           )}
 
-          {/* Item 11: Infinite scroll sentinel + loading indicator */}
-          <div ref={sentinelRef} className="h-1" aria-hidden="true" />
-
+          {/* Continuous look-ahead pre-load indicator */}
           {loadingMore && (
             <div className="pt-6 pb-4 flex justify-center">
               <div className="flex items-center gap-2 text-content-secondary">

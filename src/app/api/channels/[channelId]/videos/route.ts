@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { Video } from '@/types/content';
+import { formatDuration } from '@/lib/formatters';
 
 export async function GET(
   req: NextRequest,
@@ -12,10 +13,12 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
+    const cursorPub = searchParams.get('cursor_published_at');
+    const cursorId = searchParams.get('cursor_id');
 
     const supabase = await createClient();
 
-    // Fetch channel details
+    // 1. Fetch channel details
     const { data: channel, error: chErr } = await supabase
       .from('channels')
       .select('*')
@@ -26,22 +29,48 @@ export async function GET(
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
     }
 
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize - 1;
-
-    // Fetch channel videos
-    const { data: videos, error: vidErr, count } = await supabase
+    // 2. Fetch channel videos with strict duration >= 300 seconds and is_short = false
+    let query = supabase
       .from('videos')
       .select('*', { count: 'exact' })
       .eq('channel_id', channelId)
+      .gte('duration_seconds', 300) // User-specified 5-minute requirement
+      .eq('is_short', false)
       .order('published_at', { ascending: false })
-      .range(start, end);
+      .order('id', { ascending: false });
+
+    // Keyset pagination when cursor is provided, falling back to range
+    if (cursorPub && cursorId) {
+      query = query
+        .or(
+          `published_at.lt.${cursorPub},and(published_at.eq.${cursorPub},id.lt.${cursorId})`
+        )
+        .limit(pageSize + 1);
+    } else {
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize; // fetch 1 extra item to determine hasMore cleanly
+      query = query.range(start, end);
+    }
+
+    const { data: rawVideos, error: vidErr, count } = await query;
 
     if (vidErr) {
       return NextResponse.json({ error: vidErr.message }, { status: 500 });
     }
 
-    const enhancedVideos: Video[] = (videos || []).map((v) => ({
+    const videosList = rawVideos || [];
+    const hasMore = videosList.length > pageSize;
+    const pageVideos = hasMore ? videosList.slice(0, pageSize) : videosList;
+
+    const lastVideo = pageVideos.length > 0 ? pageVideos[pageVideos.length - 1] : null;
+    const nextCursor = lastVideo
+      ? {
+          published_at: lastVideo.published_at,
+          id: lastVideo.id,
+        }
+      : null;
+
+    const enhancedVideos: Video[] = pageVideos.map((v) => ({
       ...v,
       channel: {
         id: channel.id,
@@ -51,22 +80,21 @@ export async function GET(
       },
       channelName: channel.title,
       channelAvatarUrl: channel.thumbnail_url,
-      duration: v.duration_seconds
-        ? `${Math.floor(v.duration_seconds / 60)}:${String(v.duration_seconds % 60).padStart(2, '0')}`
-        : undefined,
+      duration: formatDuration(v.duration_seconds),
     }));
-
-    const total = count || 0;
-    const hasMore = end + 1 < total;
 
     return NextResponse.json({
       channel,
       videos: enhancedVideos,
-      total,
+      total: count || 0,
       page,
       hasMore,
+      nextCursor,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to fetch channel videos' }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || 'Failed to fetch channel videos' },
+      { status: 500 }
+    );
   }
 }

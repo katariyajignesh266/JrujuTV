@@ -9,6 +9,7 @@ import { Zap, ChevronUp, ChevronDown, Plus, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { Video } from '@/types/content';
 import { cn } from '@/lib/cn';
+import { formatViewCount } from '@/lib/formatters';
 
 export default function ShortsPage() {
   const { role, initialized } = useAuthStore();
@@ -220,7 +221,7 @@ export default function ShortsPage() {
                         {short.view_count !== undefined && (
                           <>
                             <span>·</span>
-                            <span>{short.view_count.toLocaleString()} views</span>
+                            <span>{formatViewCount(short.view_count)}</span>
                           </>
                         )}
                       </div>

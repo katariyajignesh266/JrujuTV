@@ -10,17 +10,7 @@ import { VideoCard } from '@/components/cards/VideoCard';
 import { Video } from '@/types/content';
 import { cn } from '@/lib/cn';
 
-function formatRelativeTime(dateStr?: string | null): string {
-  if (!dateStr) return '';
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffInDays < 1) return 'Today';
-  if (diffInDays === 1) return 'Yesterday';
-  if (diffInDays < 30) return `${diffInDays} days ago`;
-  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
-  return `${Math.floor(diffInDays / 365)} years ago`;
-}
+import { formatViewCount, formatRelativeTime, formatCompactNumber } from '@/lib/formatters';
 
 export default function VideoPlaybackPage({
   params,
@@ -145,7 +135,7 @@ export default function VideoPlaybackPage({
                     <span>{channel?.title || video.channelName || 'Curated Channel'}</span>
                   </h3>
                   <p className="text-[11.5px] text-content-secondary">
-                    {channel?.subscriber_count ? `${channel.subscriber_count.toLocaleString()} subscribers` : 'Parent approved'}
+                    {channel?.subscriber_count ? `${formatCompactNumber(channel.subscriber_count)} subscribers` : 'Parent approved'}
                   </p>
                 </div>
               </Link>
@@ -153,7 +143,7 @@ export default function VideoPlaybackPage({
               {/* Stats badge */}
               <div className="flex items-center gap-3 text-xs text-content-secondary pl-1 sm:pl-0">
                 {video.view_count !== undefined && (
-                  <span>{video.view_count.toLocaleString()} views</span>
+                  <span>{formatViewCount(video.view_count)}</span>
                 )}
                 {video.published_at && (
                   <>

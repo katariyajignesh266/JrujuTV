@@ -3,6 +3,7 @@
 import { CheckCircle2, Plus, Loader2 } from 'lucide-react';
 import { ChannelPreview } from '@/types/content';
 import { cn } from '@/lib/cn';
+import { formatCompactNumber } from '@/lib/formatters';
 
 interface ChannelPreviewCardProps {
   preview: ChannelPreview;
@@ -40,9 +41,9 @@ export function ChannelPreviewCard({ preview, onAdd, isAdding }: ChannelPreviewC
           </div>
 
           <p className="text-[12px] text-content-secondary">
-            {preview.subscriber_count > 0 && `${preview.subscriber_count.toLocaleString()} subscribers`}
+            {preview.subscriber_count > 0 && `${formatCompactNumber(preview.subscriber_count)} subscribers`}
             {preview.subscriber_count > 0 && preview.video_count > 0 && ' · '}
-            {preview.video_count > 0 && `${preview.video_count.toLocaleString()} videos`}
+            {preview.video_count > 0 && `${formatCompactNumber(preview.video_count)} videos`}
           </p>
 
           <p className="text-[11.5px] text-content-secondary/80 pt-1">

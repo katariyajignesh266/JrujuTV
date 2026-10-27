@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { Video } from '@/types/content';
+import { formatViewCount, formatRelativeTime, formatDuration } from '@/lib/formatters';
 
 interface VideoCardProps {
   video?: Video;
@@ -19,24 +21,6 @@ interface VideoCardProps {
   layout?: 'grid' | 'row';
 }
 
-function formatRelativeTime(dateStr?: string | null): string {
-  if (!dateStr) return '';
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return 'Just now';
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}h ago`;
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 30) return `${diffInDays}d ago`;
-  const diffInMonths = Math.floor(diffInDays / 30);
-  if (diffInMonths < 12) return `${diffInMonths}mo ago`;
-  return `${Math.floor(diffInMonths / 12)}y ago`;
-}
-
 export function VideoCard({
   video,
   id,
@@ -51,6 +35,8 @@ export function VideoCard({
   skeleton,
   layout = 'grid',
 }: VideoCardProps) {
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+
   const activeVideoId = video?.youtube_video_id || video?.id || youtubeVideoId || id;
   const activeTitle = video?.title || title;
   const activeChannelName = video?.channel?.title || video?.channelName || channelName;
@@ -59,10 +45,9 @@ export function VideoCard({
   const activeThumb = video?.thumbnail_url || thumbnailUrl;
   const activeDuration =
     video?.duration ||
-    (video?.duration_seconds
-      ? `${Math.floor(video.duration_seconds / 60)}:${String(video.duration_seconds % 60).padStart(2, '0')}`
-      : duration);
+    (video?.duration_seconds ? formatDuration(video.duration_seconds) : duration);
   const activeDate = formatRelativeTime(video?.published_at || publishedAt);
+  const formattedViews = activeViews !== undefined ? formatViewCount(activeViews) : '';
 
   const isLoading = skeleton || !activeTitle;
 
@@ -71,38 +56,44 @@ export function VideoCard({
       className={cn(
         'group flex gap-3',
         layout === 'grid' ? 'flex-col' : 'flex-row items-start',
-        /* Item 2: Removed rounded-2xl — rectangular, edge-to-edge cards */
         'overflow-hidden',
         'transition-all duration-200 hover:scale-[1.01]',
-        'cursor-pointer'
+        'cursor-pointer w-full'
       )}
       aria-label={isLoading ? 'Loading video' : `Video: ${activeTitle}`}
     >
-      {/* Thumbnail — Item 2: No rounding, no border. Item 3: bg-black prevents dark-mode bleed */}
+      {/* Thumbnail Container — Strict 16:9 aspect ratio space reservation (Zero CLS) */}
       <div
         className={cn(
-          'relative aspect-video w-full overflow-hidden shrink-0',
-          /* Item 3 fix: Use bg-black instead of bg-surface-secondary to avoid visible
-             bleed-through on transparent image edges in dark mode. The old border-border/40
-             was the primary dark-mode artifact source — now removed entirely. */
-          'bg-black',
+          'relative aspect-video w-full overflow-hidden shrink-0 bg-neutral-900',
           layout === 'row' ? 'w-44 sm:w-56' : 'w-full',
           isLoading && 'animate-pulse bg-surface-secondary'
         )}
       >
+        {/* Shimmer Placeholder before image loads */}
+        {!thumbLoaded && !isLoading && (
+          <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 animate-pulse" />
+        )}
+
         {activeThumb && !isLoading && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={activeThumb}
             alt={activeTitle ?? ''}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className={cn(
+              'absolute inset-0 w-full h-full object-cover transition-all duration-300 group-hover:scale-105',
+              thumbLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
+            )}
             loading="lazy"
+            decoding="async"
+            onLoad={() => setThumbLoaded(true)}
           />
         )}
+
         {/* Duration badge */}
         {activeDuration && !isLoading && (
           <span
-            className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded-md bg-black/80 backdrop-blur-sm text-white text-[10px] font-semibold tracking-wider"
+            className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded-md bg-black/80 backdrop-blur-sm text-white text-[10px] font-semibold tracking-wider z-10"
             aria-label={`Duration: ${activeDuration}`}
           >
             {activeDuration}
@@ -123,7 +114,13 @@ export function VideoCard({
           >
             {activeChannelAvatar && !isLoading ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={activeChannelAvatar} alt={activeChannelName || ''} className="h-full w-full object-cover" />
+              <img
+                src={activeChannelAvatar}
+                alt={activeChannelName || ''}
+                className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
             ) : (
               <div className="h-full w-full bg-brand-primary/20 flex items-center justify-center text-xs font-bold text-brand-primary">
                 {activeChannelName ? activeChannelName.charAt(0).toUpperCase() : ''}
@@ -144,19 +141,19 @@ export function VideoCard({
           </div>
           {isLoading && <div className="animate-pulse rounded h-3 bg-surface-secondary w-3/4 mt-1" />}
 
-          {/* Meta */}
+          {/* Consistent YouTube-style Meta */}
           {!isLoading ? (
-            <div className="text-[11.5px] text-content-secondary line-clamp-1">
-              <span>{activeChannelName}</span>
-              {activeViews !== undefined && (
+            <div className="text-[11.5px] text-content-secondary line-clamp-1 flex flex-wrap items-center gap-1">
+              <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeChannelName}</span>
+              {formattedViews && (
                 <>
-                  <span className="mx-1">·</span>
-                  <span>{activeViews.toLocaleString()} views</span>
+                  <span>·</span>
+                  <span>{formattedViews}</span>
                 </>
               )}
               {activeDate && (
                 <>
-                  <span className="mx-1">·</span>
+                  <span>·</span>
                   <span>{activeDate}</span>
                 </>
               )}
@@ -174,8 +171,10 @@ export function VideoCard({
   }
 
   return (
-    /* Item 2: Removed rounded-2xl from the Link wrapper */
-    <Link href={`/videos/${activeVideoId}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
+    <Link
+      href={`/videos/${activeVideoId}`}
+      className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary w-full"
+    >
       {content}
     </Link>
   );

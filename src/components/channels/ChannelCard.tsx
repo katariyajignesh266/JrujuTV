@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Eye, EyeOff, RefreshCw, Trash2, ExternalLink, Loader2 } from 'lucide-react';
 import { Channel } from '@/types/content';
 import { cn } from '@/lib/cn';
+import { formatCompactNumber, formatRelativeTime } from '@/lib/formatters';
 
 interface ChannelCardProps {
   channel: Channel;
@@ -12,19 +13,6 @@ interface ChannelCardProps {
   onSync?: (channel: Channel) => void;
   onDelete?: (channel: Channel) => void;
   isSyncing?: boolean;
-}
-
-function formatRelativeTime(dateStr?: string | null): string {
-  if (!dateStr) return 'Never';
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / 60000);
-  if (diffInMinutes < 1) return 'Just now';
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}h ago`;
-  const diffInDays = Math.floor(diffInHours / 24);
-  return `${diffInDays}d ago`;
 }
 
 export function ChannelCard({
@@ -63,8 +51,8 @@ export function ChannelCard({
         </h3>
 
         <div className="flex items-center gap-1.5 text-[12px] text-content-secondary mt-1">
-          {channel.video_count > 0 && <span>{channel.video_count.toLocaleString()} videos</span>}
-          {channel.subscriber_count > 0 && <span>· {channel.subscriber_count.toLocaleString()} subs</span>}
+          {channel.video_count > 0 && <span>{formatCompactNumber(channel.video_count)} videos</span>}
+          {channel.subscriber_count > 0 && <span>· {formatCompactNumber(channel.subscriber_count)} subs</span>}
         </div>
 
         <div className="mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-surface-elevated border border-border text-content-primary group-hover:bg-brand-primary group-hover:text-white transition-all">

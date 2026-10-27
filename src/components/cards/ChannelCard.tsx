@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/cn';
 import { Tv2 } from 'lucide-react';
+import { formatCompactNumber } from '@/lib/formatters';
 
 interface ChannelCardProps {
   name?: string;
@@ -53,7 +54,7 @@ export function ChannelCard({ name, avatarUrl, subscriberCount, videoCount, skel
           <>
             <p className="font-semibold text-fluid-sm text-content-primary truncate">{name}</p>
             <p className="text-[11px] text-content-secondary">
-              {subscriberCount?.toLocaleString()} subscribers · {videoCount} videos
+              {formatCompactNumber(subscriberCount)} subscribers · {formatCompactNumber(videoCount)} videos
             </p>
           </>
         )}
