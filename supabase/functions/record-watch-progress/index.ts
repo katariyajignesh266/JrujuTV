@@ -27,16 +27,15 @@ serve(async (req) => {
       })
     }
 
+    const token = authHeader.replace(/^Bearer\s+/i, '')
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-    // Validate the caller's JWT
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
-    const { data: { user }, error: userError } = await anonClient.auth.getUser()
+    const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -44,16 +43,25 @@ serve(async (req) => {
       })
     }
 
-    // ── CRITICAL AUTH CHECK: only child role may record watch progress ──────
-    const role = user.app_metadata?.role
-    if (role !== 'child') {
+    // ── CRITICAL AUTH CHECK: child role or child account ──────
+    const isChild = user.app_metadata?.role === 'child' || user.user_metadata?.role === 'child'
+    if (!isChild) {
       return new Response(JSON.stringify({ error: 'Forbidden: child role required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const parentId = user.app_metadata?.parent_id
+    let parentId = user.app_metadata?.parent_id
+    if (!parentId) {
+      const { data: childRow } = await adminClient
+        .from('children')
+        .select('parent_id')
+        .eq('id', user.id)
+        .maybeSingle()
+      parentId = childRow?.parent_id
+    }
+
     if (!parentId) {
       return new Response(JSON.stringify({ error: 'Forbidden: missing parent_id claim' }), {
         status: 403,
@@ -79,12 +87,7 @@ serve(async (req) => {
       })
     }
 
-    // ── SECURITY: child_id always comes from the verified JWT, never from the body ──
     const childId = user.id
-
-    // Use service role client to call the SECURITY DEFINER RPC
-    // (which validates idempotency and does all four upserts atomically)
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
     const { data, error: rpcError } = await adminClient.rpc('record_watch_progress', {
       p_child_id:          childId,

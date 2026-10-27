@@ -26,14 +26,15 @@ serve(async (req) => {
       })
     }
 
+    const token = authHeader.replace(/^Bearer\s+/i, '')
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -41,21 +42,22 @@ serve(async (req) => {
       })
     }
 
-    // Only parents may call this endpoint
-    const role = user.app_metadata?.role
-    if (role !== 'parent') {
+    // Only parents may call this endpoint (children cannot view all children's summaries)
+    const isChild = user.app_metadata?.role === 'child' || user.user_metadata?.role === 'child'
+    if (isChild) {
       return new Response(JSON.stringify({ error: 'Forbidden: parent role required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Call the RPC — parent_id comes from the JWT (user.id), not the body
-    const { data, error: rpcError } = await supabase.rpc('get_children_today_summary', {
+    // Call the RPC — parent_id comes from verified JWT (user.id)
+    const { data, error: rpcError } = await adminClient.rpc('get_children_today_summary', {
       p_parent_id: user.id,
     })
 
     if (rpcError) {
+      console.error('get_children_today_summary RPC error:', rpcError)
       return new Response(JSON.stringify({ error: rpcError.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -66,6 +68,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
+    console.error('get-children-today-summary error:', err)
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

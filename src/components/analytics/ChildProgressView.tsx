@@ -147,6 +147,7 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
   useEffect(() => {
     let cancelled = false;
     async function fetchSummary() {
+      if (!childId || !accessToken) return;
       setSummaryLoading(true);
       setSummaryError(null);
       try {
@@ -172,10 +173,11 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
     fetchSummary();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [childId]);
+  }, [childId, accessToken]);
 
   // ── Fetch initial history page ─────────────────────────────────────────────
   const fetchHistory = useCallback(async (cursorArg: typeof cursor) => {
+    if (!childId || !accessToken) return;
     setHistoryLoading(cursorArg === null);
     setHistoryError(null);
     if (cursorArg !== null) setLoadingMore(true);
@@ -200,7 +202,7 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
       setLoadingMore(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [childId]);
+  }, [childId, accessToken]);
 
   useEffect(() => {
     fetchHistory(null);

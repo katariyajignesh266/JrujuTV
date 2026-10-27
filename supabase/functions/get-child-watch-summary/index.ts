@@ -21,20 +21,21 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
+    const token = authHeader.replace(/^Bearer\s+/i, '')
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -50,19 +51,18 @@ serve(async (req) => {
       })
     }
 
-    const role = user.app_metadata?.role
+    const isChild = user.app_metadata?.role === 'child' || user.user_metadata?.role === 'child'
 
-    // Auth: child may only view their own data; parent may view any of their children
-    if (role === 'child') {
+    if (isChild) {
       if (user.id !== child_id) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-    } else if (role === 'parent') {
-      // Verify the requested child belongs to this parent
-      const { data: childRow, error: childErr } = await supabase
+    } else {
+      // Parent check: verify the requested child belongs to this parent
+      const { data: childRow, error: childErr } = await adminClient
         .from('children')
         .select('id')
         .eq('id', child_id)
@@ -70,20 +70,14 @@ serve(async (req) => {
         .maybeSingle()
 
       if (childErr || !childRow) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        return new Response(JSON.stringify({ error: 'Forbidden: child account not linked to this parent' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-    } else {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
     }
 
-    // Call the SECURITY INVOKER RPC (inherits the caller's RLS)
-    const { data, error: rpcError } = await supabase.rpc('get_child_watch_summary', {
+    const { data, error: rpcError } = await adminClient.rpc('get_child_watch_summary', {
       p_child_id: child_id,
     })
 
