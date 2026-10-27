@@ -1,6 +1,11 @@
 -- Migration 005: Feed performance composite indexes and server-side cursor interleaving RPC
 
--- 1. COMPOSITE INDEXES FOR FAST KEYSET SCANNING & DURATION FILTERING
+-- 1. ADD SYNC STATUS TRACKING COLUMNS TO CHANNELS
+ALTER TABLE public.channels ADD COLUMN IF NOT EXISTS sync_status TEXT NOT NULL DEFAULT 'complete';
+ALTER TABLE public.channels ADD COLUMN IF NOT EXISTS synced_video_count BIGINT DEFAULT 0;
+ALTER TABLE public.channels ADD COLUMN IF NOT EXISTS total_video_count BIGINT DEFAULT 0;
+
+-- 2. COMPOSITE INDEXES FOR FAST KEYSET SCANNING & DURATION FILTERING
 CREATE INDEX IF NOT EXISTS idx_videos_feed_keyset 
   ON public.videos (channel_id, duration_seconds, is_short, published_at DESC, id DESC);
 

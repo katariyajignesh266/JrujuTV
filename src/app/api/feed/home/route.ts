@@ -64,11 +64,26 @@ export async function GET(req: NextRequest) {
 
     const supabase = await createClient();
 
-    // 1. Fetch active channels (RLS automatically scopes to parent or child's parent)
-    const { data: channels, error: chErr } = await supabase
+    let channels = null;
+    let chErr = null;
+
+    const initialFetch = await supabase
       .from('channels')
-      .select('id, title, thumbnail_url')
+      .select('id, title, thumbnail_url, sync_status')
       .eq('is_active', true);
+
+    if (initialFetch.error && (initialFetch.error.code === '42703' || initialFetch.error.message.includes('sync_status'))) {
+      // Graceful fallback for environments before migration adds sync_status
+      const fallbackFetch = await supabase
+        .from('channels')
+        .select('id, title, thumbnail_url')
+        .eq('is_active', true);
+      channels = fallbackFetch.data;
+      chErr = fallbackFetch.error;
+    } else {
+      channels = initialFetch.data;
+      chErr = initialFetch.error;
+    }
 
     if (chErr) {
       return NextResponse.json({ error: chErr.message }, { status: 500 });
@@ -78,12 +93,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         videos: [],
         hasMore: false,
+        allChannelsSynced: true,
         total: 0,
         nextCursor: null,
         seed,
         page,
       });
     }
+
+    // True only when every active channel has completed its full initial ingestion
+    const allChannelsSynced = channels.every(
+      (c: any) => !c.sync_status || c.sync_status === 'complete'
+    );
 
     // Deterministically shuffle channels once according to the session seed
     const prng = mulberry32(seed);
@@ -103,19 +124,28 @@ export async function GET(req: NextRequest) {
         }
       );
 
-      if (!rpcErr && rpcData && Array.isArray(rpcData.videos)) {
-        const enhancedVideos: Video[] = rpcData.videos.map((v: any) => ({
+      // RPC returns JSONB; Supabase may return it as a plain object (not raw array)
+      const rpcVideos = Array.isArray(rpcData?.videos)
+        ? rpcData.videos
+        : Array.isArray(rpcData)
+        ? rpcData
+        : null;
+
+      if (!rpcErr && rpcVideos !== null) {
+        const enhancedVideos: Video[] = rpcVideos.map((v: any) => ({
           ...v,
           duration: formatDuration(v.duration_seconds),
         }));
 
-        const nextCursorEncoded = rpcData.next_cursors
-          ? Buffer.from(JSON.stringify(rpcData.next_cursors)).toString('base64')
+        const nextCursorsRaw = rpcData?.next_cursors ?? rpcData?.next_cursors ?? null;
+        const nextCursorEncoded = nextCursorsRaw
+          ? Buffer.from(JSON.stringify(nextCursorsRaw)).toString('base64')
           : null;
 
         return NextResponse.json({
           videos: enhancedVideos,
-          hasMore: Boolean(rpcData.has_more),
+          hasMore: Boolean(rpcData?.has_more),
+          allChannelsSynced,
           nextCursor: nextCursorEncoded,
           seed,
           page,
@@ -209,11 +239,18 @@ export async function GET(req: NextRequest) {
       round++;
     }
 
+    // Fix: use actual consumed-per-channel count rather than the round counter
+    // (round is incremented one extra time when addedInRound === 0)
+    const consumedPerChannel = new Map<string, number>();
+    for (const v of interleavedVideos) {
+      consumedPerChannel.set(v.channel_id, (consumedPerChannel.get(v.channel_id) || 0) + 1);
+    }
     const hasMore =
       anyChannelHasMore ||
       channelIds.some((cid) => {
         const pool = channelCandidates.get(cid) || [];
-        return round < pool.length;
+        const consumed = consumedPerChannel.get(cid) || 0;
+        return consumed < pool.length;
       });
 
     const nextCursorEncoded = Buffer.from(JSON.stringify(nextCursors)).toString('base64');
@@ -221,6 +258,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       videos: interleavedVideos,
       hasMore,
+      allChannelsSynced,
       nextCursor: nextCursorEncoded,
       seed,
       page,

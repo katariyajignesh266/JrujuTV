@@ -89,7 +89,25 @@ serve(async (req) => {
       );
     }
 
-    // 2. Insert into channels table
+    // 2. Fetch total_video_count from YouTube channel statistics (best-effort)
+    let totalVideoCount = video_count || 0;
+    if (youtubeApiKey && youtube_channel_id) {
+      try {
+        const chStatsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(
+          youtube_channel_id
+        )}&key=${youtubeApiKey}`;
+        const chRes = await fetch(chStatsUrl);
+        const chData = await chRes.json();
+        const ytCount = chData.items?.[0]?.statistics?.videoCount;
+        if (ytCount) totalVideoCount = parseInt(ytCount, 10);
+      } catch (statsErr) {
+        console.warn('Could not fetch channel statistics:', statsErr);
+      }
+    }
+
+    // 3. Insert channel with sync_status='pending' — NO inline video sync.
+    //    All video ingestion is handled by the resumable sync-channel function,
+    //    triggered by client-side continuation polling after this response returns.
     const { data: newChannel, error: insertError } = await adminClient
       .from('channels')
       .insert({
@@ -101,6 +119,10 @@ serve(async (req) => {
         video_count,
         uploads_playlist_id,
         is_active: true,
+        sync_status: 'pending',
+        synced_video_count: 0,
+        total_video_count: totalVideoCount,
+        sync_page_token: null,
       })
       .select()
       .single();
@@ -112,76 +134,15 @@ serve(async (req) => {
       });
     }
 
-    // 3. Perform initial video sync
-    let syncedCount = 0;
-    if (youtubeApiKey) {
-      try {
-        const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${encodeURIComponent(
-          uploads_playlist_id
-        )}&maxResults=50&key=${youtubeApiKey}`;
-        const plRes = await fetch(playlistUrl);
-        const plData = await plRes.json();
-        const items = plData.items || [];
-
-        if (items.length > 0) {
-          const videoIds = items.map((it: any) => it.contentDetails?.videoId).filter(Boolean);
-          const videoDetailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds.join(
-            ','
-          )}&key=${youtubeApiKey}`;
-          const vRes = await fetch(videoDetailUrl);
-          const vData = await vRes.json();
-          const videoMap = new Map<string, any>();
-          if (vData.items) {
-            vData.items.forEach((item: any) => videoMap.set(item.id, item));
-          }
-
-          const upsertRows = items.map((item: any) => {
-            const vidId = item.contentDetails?.videoId;
-            const detail = videoMap.get(vidId);
-            const snippet = item.snippet || {};
-            const durationSeconds = parseIsoDuration(detail?.contentDetails?.duration || '');
-            const views = parseInt(detail?.statistics?.viewCount || '0', 10);
-            const thumb =
-              snippet.thumbnails?.maxres?.url ||
-              snippet.thumbnails?.standard?.url ||
-              snippet.thumbnails?.high?.url ||
-              snippet.thumbnails?.medium?.url ||
-              `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`;
-
-            return {
-              channel_id: newChannel.id,
-              youtube_video_id: vidId,
-              title: snippet.title || 'Untitled Video',
-              thumbnail_url: thumb,
-              duration_seconds: durationSeconds,
-              view_count: views,
-              published_at: snippet.publishedAt || item.contentDetails?.videoPublishedAt || null,
-              last_synced_at: new Date().toISOString(),
-            };
-          });
-
-          if (upsertRows.length > 0) {
-            await adminClient
-              .from('videos')
-              .upsert(upsertRows, { onConflict: 'channel_id,youtube_video_id' });
-            syncedCount = upsertRows.length;
-          }
-
-          await adminClient
-            .from('channels')
-            .update({ last_synced_at: new Date().toISOString() })
-            .eq('id', newChannel.id);
-        }
-      } catch (syncErr) {
-        console.error('Initial sync warning:', syncErr);
-      }
-    }
-
+    // Return immediately — client will begin continuation polling
     return new Response(
       JSON.stringify({
         success: true,
         channel: newChannel,
-        videosSynced: syncedCount,
+        videosSynced: 0,
+        syncStatus: 'pending',
+        totalVideoCount,
+        message: 'Channel added. Video import will begin automatically.',
       }),
       { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

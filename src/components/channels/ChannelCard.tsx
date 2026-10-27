@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Eye, EyeOff, RefreshCw, Trash2, ExternalLink, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, Trash2, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react';
 import { Channel } from '@/types/content';
 import { cn } from '@/lib/cn';
 import { formatCompactNumber, formatRelativeTime } from '@/lib/formatters';
@@ -93,9 +93,22 @@ export function ChannelCard({
                 Hidden
               </span>
             )}
+            {(channel.sync_status === 'pending' || channel.sync_status === 'in_progress') && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Loader2 size={9} className="animate-spin" />
+                Importing
+              </span>
+            )}
+            {channel.sync_status === 'complete' && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <CheckCircle2 size={9} />
+                Synced
+              </span>
+            )}
           </div>
           <p className="text-[12px] text-content-secondary">
-            {channel.video_count > 0 && `${channel.video_count} videos · `}
+            {(channel.synced_video_count ?? channel.video_count) > 0 &&
+              `${(channel.synced_video_count ?? channel.video_count).toLocaleString()} videos · `}
             Last synced: {formatRelativeTime(channel.last_synced_at)}
           </p>
         </div>

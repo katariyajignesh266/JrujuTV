@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -14,6 +14,8 @@ import {
   X,
   Trash2,
   ShieldAlert,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { ChannelPreviewCard } from '@/components/channels/ChannelPreviewCard';
@@ -31,10 +33,26 @@ import {
 import { Channel, ChannelPreview } from '@/types/content';
 import { cn } from '@/lib/cn';
 
+/** Maximum continuation polling iterations per channel before marking stalled */
+const MAX_CONTINUATION_POLLS = 200;
+/** Interval between continuation polling calls (ms) */
+const POLL_INTERVAL_MS = 3000;
+
+interface SyncProgress {
+  status: 'idle' | 'polling' | 'complete' | 'stalled';
+  syncedVideoCount: number;
+  totalVideoCount: number;
+  pct: number;
+}
+
+function calcProgress(synced: number, total: number): SyncProgress {
+  const pct = total > 0 ? Math.min(100, Math.round((synced / total) * 100)) : 0;
+  return { status: 'polling', syncedVideoCount: synced, totalVideoCount: total, pct };
+}
+
 export default function ManageChannelsPage() {
   const { role, initialized } = useAuthStore();
   const router = useRouter();
-
   const { openAuthModal } = useUIStore();
 
   const [urlInput, setUrlInput] = useState('');
@@ -45,30 +63,116 @@ export default function ManageChannelsPage() {
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(true);
-  const [syncingMap, setSyncingMap] = useState<Record<string, boolean>>({});
+
+  // Per-channel sync in-progress tracking (replaces simple syncingMap)
+  const [syncProgressMap, setSyncProgressMap] = useState<Record<string, SyncProgress>>({});
+
+  // Polling interval refs — keyed by channelId so multiple channels can poll concurrently
+  const pollCountRef = useRef<Record<string, number>>({});
+  const pollTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Delete modal state
   const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Load channels on mount
-  const loadChannelsList = async () => {
+  const loadChannelsList = useCallback(async () => {
     try {
       setLoadingChannels(true);
       const data = await getChannels();
       setChannels(data);
+      // Resume polling for any channel still in_progress after a page refresh
+      data.forEach((ch) => {
+        if (ch.sync_status === 'pending' || ch.sync_status === 'in_progress') {
+          if (!pollTimerRef.current[ch.id]) {
+            startContinuationPolling(ch.id, ch.synced_video_count ?? 0, ch.total_video_count ?? 0);
+          }
+        }
+      });
     } catch (err: any) {
       console.error('Failed to load channels:', err);
     } finally {
       setLoadingChannels(false);
     }
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (initialized && role === 'parent') {
       loadChannelsList();
     }
-  }, [role, initialized]);
+    const currentTimers = pollTimerRef.current;
+    // Cleanup all polling on unmount
+    return () => {
+      Object.values(currentTimers).forEach(clearTimeout);
+    };
+  }, [role, initialized, loadChannelsList]);
+
+  /** Start a continuation polling loop for a channel that isn't fully synced yet. */
+  const startContinuationPolling = useCallback(
+    (channelId: string, initialSynced: number, initialTotal: number) => {
+      pollCountRef.current[channelId] = 0;
+
+      // Set initial progress state
+      setSyncProgressMap((prev) => ({
+        ...prev,
+        [channelId]: {
+          ...calcProgress(initialSynced, initialTotal),
+          status: 'polling',
+        },
+      }));
+
+      const poll = async () => {
+        const count = pollCountRef.current[channelId] ?? 0;
+
+        if (count >= MAX_CONTINUATION_POLLS) {
+          // Safety cap hit — mark stalled, let daily cron finish it
+          setSyncProgressMap((prev) => ({
+            ...prev,
+            [channelId]: { ...prev[channelId], status: 'stalled' },
+          }));
+          delete pollTimerRef.current[channelId];
+          return;
+        }
+
+        try {
+          const result = await syncChannel(channelId, false);
+          pollCountRef.current[channelId] = count + 1;
+
+          const synced = result.syncedVideoCount ?? 0;
+          const total = result.totalVideoCount ?? initialTotal;
+
+          if (result.complete) {
+            // Full sync completed!
+            setSyncProgressMap((prev) => ({
+              ...prev,
+              [channelId]: { status: 'complete', syncedVideoCount: synced, totalVideoCount: total, pct: 100 },
+            }));
+            // Refresh the channels list to get updated sync_status from DB
+            await loadChannelsList();
+            delete pollTimerRef.current[channelId];
+          } else {
+            // More pages remain — update progress and schedule next poll
+            setSyncProgressMap((prev) => ({
+              ...prev,
+              [channelId]: {
+                ...calcProgress(synced, total),
+                status: 'polling',
+              },
+            }));
+            pollTimerRef.current[channelId] = setTimeout(poll, POLL_INTERVAL_MS);
+          }
+        } catch (err) {
+          // Network error — retry after a longer delay
+          console.warn(`Sync poll error for channel ${channelId}:`, err);
+          pollCountRef.current[channelId] = count + 1;
+          pollTimerRef.current[channelId] = setTimeout(poll, POLL_INTERVAL_MS * 3);
+        }
+      };
+
+      // Start the first poll immediately
+      pollTimerRef.current[channelId] = setTimeout(poll, 500);
+    },
+    [loadChannelsList]
+  );
 
   if (initialized && role !== 'parent') {
     return (
@@ -81,7 +185,8 @@ export default function ManageChannelsPage() {
             Parent Access Required
           </h2>
           <p className="text-fluid-sm text-content-secondary leading-relaxed">
-            Only parents can add, hide, or manage YouTube channels. Please sign in with your parent account to access channel controls.
+            Only parents can add, hide, or manage YouTube channels. Please sign in with your parent
+            account to access channel controls.
           </p>
           <div className="pt-3 flex justify-center gap-3">
             <Link
@@ -123,14 +228,31 @@ export default function ManageChannelsPage() {
     }
   };
 
-  // Handle Add Channel
+  // Handle Add Channel — returns immediately (no inline sync), then starts polling
   const handleAddChannel = async (previewItem: ChannelPreview) => {
     setIsAdding(true);
     try {
-      await addChannel(previewItem);
+      const newChannel = await addChannel(previewItem);
       setUrlInput('');
       setPreview(null);
-      await loadChannelsList();
+
+      // Add optimistic channel to list immediately with pending status
+      const optimisticChannel: Channel = {
+        ...newChannel,
+        sync_status: 'pending',
+        synced_video_count: 0,
+        total_video_count: previewItem.video_count || 0,
+        name: newChannel.title,
+        avatarUrl: newChannel.thumbnail_url,
+      };
+      setChannels((prev) => [optimisticChannel, ...prev]);
+
+      // Begin continuation polling immediately
+      startContinuationPolling(
+        newChannel.id,
+        0,
+        previewItem.video_count || 0
+      );
     } catch (err: any) {
       setFetchError(err.message || 'Failed to add channel.');
     } finally {
@@ -141,7 +263,6 @@ export default function ManageChannelsPage() {
   // Handle Toggle Active (Hide/Unhide)
   const handleToggleActive = async (ch: Channel) => {
     const nextState = !ch.is_active;
-    // Optimistic update
     setChannels((prev) =>
       prev.map((c) => (c.id === ch.id ? { ...c, is_active: nextState } : c))
     );
@@ -149,23 +270,38 @@ export default function ManageChannelsPage() {
       await toggleChannelActive(ch.id, nextState);
     } catch (err) {
       console.error('Failed to toggle active state:', err);
-      // Revert on error
       setChannels((prev) =>
         prev.map((c) => (c.id === ch.id ? { ...c, is_active: ch.is_active } : c))
       );
     }
   };
 
-  // Handle Manual Sync
+  // Handle Manual Sync — incremental for complete channels, full-resume for others
   const handleSync = async (ch: Channel) => {
-    setSyncingMap((prev) => ({ ...prev, [ch.id]: true }));
+    const isIncremental = ch.sync_status === 'complete';
+
+    if (!isIncremental) {
+      // Resume/restart full sync — begin continuation polling
+      startContinuationPolling(ch.id, ch.synced_video_count ?? 0, ch.total_video_count ?? 0);
+      return;
+    }
+
+    // Incremental refresh for fully-synced channels
+    setSyncProgressMap((prev) => ({
+      ...prev,
+      [ch.id]: { status: 'polling', syncedVideoCount: 0, totalVideoCount: 0, pct: 0 },
+    }));
     try {
-      await syncChannel(ch.id);
+      await syncChannel(ch.id, true);
       await loadChannelsList();
     } catch (err) {
-      console.error('Sync failed:', err);
+      console.error('Incremental sync failed:', err);
     } finally {
-      setSyncingMap((prev) => ({ ...prev, [ch.id]: false }));
+      setSyncProgressMap((prev) => {
+        const next = { ...prev };
+        delete next[ch.id];
+        return next;
+      });
     }
   };
 
@@ -174,6 +310,11 @@ export default function ManageChannelsPage() {
     if (!channelToDelete) return;
     setIsDeleting(true);
     try {
+      // Stop any active polling for this channel first
+      if (pollTimerRef.current[channelToDelete.id]) {
+        clearTimeout(pollTimerRef.current[channelToDelete.id]);
+        delete pollTimerRef.current[channelToDelete.id];
+      }
       await deleteChannel(channelToDelete.id);
       setChannels((prev) => prev.filter((c) => c.id !== channelToDelete.id));
       setChannelToDelete(null);
@@ -211,12 +352,17 @@ export default function ManageChannelsPage() {
             Add a New Channel
           </h2>
           <p className="text-[12px] text-content-secondary leading-relaxed">
-            Paste any YouTube channel link (e.g. <span className="font-mono text-content-primary">youtube.com/@handle</span> or <span className="font-mono text-content-primary">youtube.com/channel/UC...</span>).
+            Paste any YouTube channel link (e.g.{' '}
+            <span className="font-mono text-content-primary">youtube.com/@handle</span> or{' '}
+            <span className="font-mono text-content-primary">youtube.com/channel/UC...</span>).
           </p>
 
           <form onSubmit={handleFetchDetails} className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-secondary pointer-events-none" size={18} />
+              <Search
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-secondary pointer-events-none"
+                size={18}
+              />
               <input
                 type="text"
                 value={urlInput}
@@ -264,11 +410,7 @@ export default function ManageChannelsPage() {
           {/* Preview Card */}
           {preview && (
             <div className="pt-2 animate-in fade-in slide-in-from-top-3 duration-200">
-              <ChannelPreviewCard
-                preview={preview}
-                onAdd={handleAddChannel}
-                isAdding={isAdding}
-              />
+              <ChannelPreviewCard preview={preview} onAdd={handleAddChannel} isAdding={isAdding} />
             </div>
           )}
         </div>
@@ -300,24 +442,113 @@ export default function ManageChannelsPage() {
               <div className="h-14 w-14 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary mb-2">
                 <Tv2 size={26} />
               </div>
-              <h3 className="font-semibold text-fluid-base text-content-primary">No Channels Added Yet</h3>
+              <h3 className="font-semibold text-fluid-base text-content-primary">
+                No Channels Added Yet
+              </h3>
               <p className="text-fluid-sm text-content-secondary max-w-sm">
                 Paste a YouTube channel link above to begin curating safe videos for your kids.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {channels.map((ch) => (
-                <ChannelCard
-                  key={ch.id}
-                  channel={ch}
-                  variant="admin"
-                  onToggleActive={handleToggleActive}
-                  onSync={handleSync}
-                  onDelete={(c) => setChannelToDelete(c)}
-                  isSyncing={syncingMap[ch.id]}
-                />
-              ))}
+              {channels.map((ch) => {
+                const progress = syncProgressMap[ch.id];
+                const isPolling = progress?.status === 'polling';
+                const isStalled = progress?.status === 'stalled';
+                const isSyncing =
+                  isPolling ||
+                  ch.sync_status === 'pending' ||
+                  ch.sync_status === 'in_progress';
+
+                return (
+                  <div key={ch.id} className="space-y-0">
+                    <ChannelCard
+                      channel={ch}
+                      variant="admin"
+                      onToggleActive={handleToggleActive}
+                      onSync={handleSync}
+                      onDelete={(c) => setChannelToDelete(c)}
+                      isSyncing={isSyncing}
+                    />
+
+                    {/* Sync progress indicator — shown during active ingestion */}
+                    {(isPolling || isStalled || ch.sync_status === 'in_progress' || ch.sync_status === 'pending') && (
+                      <div
+                        className={cn(
+                          'mx-1 px-4 py-3 rounded-b-2xl border border-t-0 space-y-2',
+                          isStalled
+                            ? 'bg-amber-500/5 border-amber-500/20'
+                            : 'bg-brand-primary/5 border-brand-primary/15'
+                        )}
+                      >
+                        {isStalled ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-amber-500">
+                              <Clock size={14} />
+                              <span className="text-xs font-medium">
+                                Import paused — will resume on next daily sync
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                startContinuationPolling(
+                                  ch.id,
+                                  progress?.syncedVideoCount ?? 0,
+                                  progress?.totalVideoCount ?? 0
+                                )
+                              }
+                              className="text-xs font-semibold text-amber-500 hover:text-amber-400 underline"
+                            >
+                              Continue
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-brand-primary">
+                                <Loader2 size={13} className="animate-spin" />
+                                <span className="text-xs font-medium">
+                                  Importing videos…{' '}
+                                  {progress
+                                    ? `${progress.syncedVideoCount.toLocaleString()} / ${progress.totalVideoCount.toLocaleString()}`
+                                    : `${(ch.synced_video_count ?? 0).toLocaleString()} / ${(ch.total_video_count ?? 0).toLocaleString()}`}
+                                </span>
+                              </div>
+                              <span className="text-[11px] font-semibold text-brand-primary">
+                                {progress?.pct ?? 0}%
+                              </span>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="h-1.5 bg-brand-primary/10 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-brand-primary rounded-full transition-all duration-500"
+                                style={{ width: `${progress?.pct ?? 0}%` }}
+                              />
+                            </div>
+                            <p className="text-[11px] text-content-secondary">
+                              More videos will appear as the import progresses. Large channels may
+                              take a few minutes.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Complete badge */}
+                    {progress?.status === 'complete' && (
+                      <div className="mx-1 px-4 py-2 rounded-b-2xl border border-t-0 bg-emerald-500/5 border-emerald-500/20">
+                        <div className="flex items-center gap-2 text-emerald-500">
+                          <CheckCircle2 size={14} />
+                          <span className="text-xs font-semibold">
+                            All videos imported — {progress.syncedVideoCount.toLocaleString()} videos synced
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -349,7 +580,8 @@ export default function ManageChannelsPage() {
             </div>
 
             <div className="mb-5 p-3.5 rounded-2xl bg-red-500/[0.08] border border-red-500/20 text-fluid-sm text-content-secondary leading-relaxed">
-              Are you sure you want to delete <span className="font-semibold text-content-primary">{channelToDelete.title}</span>?
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-content-primary">{channelToDelete.title}</span>?
               Your children will immediately lose access to all videos from this channel.
             </div>
 

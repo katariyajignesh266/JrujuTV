@@ -110,9 +110,22 @@ export async function addChannel(preview: ChannelPreview): Promise<Channel> {
   return localData.channel;
 }
 
-export async function syncChannel(channelId: string): Promise<{ success: boolean; videosSynced: number }> {
+export async function syncChannel(
+  channelId: string,
+  isIncrementalRefresh: boolean = false
+): Promise<{
+  success: boolean;
+  complete: boolean;
+  mode?: string;
+  videosSyncedThisInvocation?: number;
+  syncedVideoCount?: number;
+  totalVideoCount?: number;
+  hasMore?: boolean;
+}> {
   const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   const token = session?.access_token;
 
   if (!token) {
@@ -120,6 +133,7 @@ export async function syncChannel(channelId: string): Promise<{ success: boolean
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const body = JSON.stringify({ channelId, isIncrementalRefresh });
 
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/sync-channel`, {
@@ -128,7 +142,7 @@ export async function syncChannel(channelId: string): Promise<{ success: boolean
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ channelId }),
+      body,
     });
 
     const data = await res.json();
@@ -151,7 +165,7 @@ export async function syncChannel(channelId: string): Promise<{ success: boolean
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ channelId }),
+    body,
   });
 
   const localData = await localRes.json();

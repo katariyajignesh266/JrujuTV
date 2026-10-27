@@ -1,4 +1,7 @@
 // src/app/api/channels/[channelId]/videos/route.ts
+// Pure keyset cursor pagination (no offset fallback).
+// Also returns channel.sync_status, synced_video_count, total_video_count for UI messaging.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { Video } from '@/types/content';
@@ -11,14 +14,13 @@ export async function GET(
   try {
     const { channelId } = await params;
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
     const cursorPub = searchParams.get('cursor_published_at');
     const cursorId = searchParams.get('cursor_id');
 
     const supabase = await createClient();
 
-    // 1. Fetch channel details
+    // 1. Fetch channel details (includes new sync_status columns)
     const { data: channel, error: chErr } = await supabase
       .from('channels')
       .select('*')
@@ -29,28 +31,26 @@ export async function GET(
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
     }
 
-    // 2. Fetch channel videos with strict duration >= 300 seconds and is_short = false
+    // 2. Pure keyset cursor pagination — always consistent, no offset/cursor mode-switch.
+    //    First page: no cursor provided → fetch newest pageSize+1 items.
+    //    Subsequent pages: cursor provided → fetch items strictly older than cursor.
     let query = supabase
       .from('videos')
       .select('*', { count: 'exact' })
       .eq('channel_id', channelId)
-      .gte('duration_seconds', 300) // User-specified 5-minute requirement
+      .gte('duration_seconds', 300) // ≥5 minutes only
       .eq('is_short', false)
       .order('published_at', { ascending: false })
-      .order('id', { ascending: false });
+      .order('id', { ascending: false })
+      .limit(pageSize + 1); // fetch 1 extra to determine hasMore cleanly
 
-    // Keyset pagination when cursor is provided, falling back to range
     if (cursorPub && cursorId) {
-      query = query
-        .or(
-          `published_at.lt.${cursorPub},and(published_at.eq.${cursorPub},id.lt.${cursorId})`
-        )
-        .limit(pageSize + 1);
-    } else {
-      const start = (page - 1) * pageSize;
-      const end = start + pageSize; // fetch 1 extra item to determine hasMore cleanly
-      query = query.range(start, end);
+      // Keyset condition: items strictly older than the last-seen item
+      query = query.or(
+        `published_at.lt.${cursorPub},and(published_at.eq.${cursorPub},id.lt.${cursorId})`
+      );
     }
+    // No else-branch needed: without cursor, the query above returns the newest items
 
     const { data: rawVideos, error: vidErr, count } = await query;
 
@@ -64,10 +64,7 @@ export async function GET(
 
     const lastVideo = pageVideos.length > 0 ? pageVideos[pageVideos.length - 1] : null;
     const nextCursor = lastVideo
-      ? {
-          published_at: lastVideo.published_at,
-          id: lastVideo.id,
-        }
+      ? { published_at: lastVideo.published_at, id: lastVideo.id }
       : null;
 
     const enhancedVideos: Video[] = pageVideos.map((v) => ({
@@ -84,10 +81,15 @@ export async function GET(
     }));
 
     return NextResponse.json({
-      channel,
+      channel: {
+        ...channel,
+        // Expose sync tracking fields explicitly for UI messaging
+        sync_status: channel.sync_status ?? 'complete',
+        synced_video_count: channel.synced_video_count ?? 0,
+        total_video_count: channel.total_video_count ?? channel.video_count ?? 0,
+      },
       videos: enhancedVideos,
       total: count || 0,
-      page,
       hasMore,
       nextCursor,
     });

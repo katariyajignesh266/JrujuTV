@@ -19,6 +19,7 @@ export default function HomePage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [allChannelsSynced, setAllChannelsSynced] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
 
   // Session-stable shuffle seed: persistent within the browser session, fresh on new tab/session
@@ -69,6 +70,7 @@ export default function HomePage() {
           }
 
           setHasMore(Boolean(data.hasMore));
+          setAllChannelsSynced(data.allChannelsSynced !== false); // default true for legacy responses
           nextCursorRef.current = data.nextCursor || null;
           setPage(pageNum);
           pageRef.current = pageNum;
@@ -208,7 +210,22 @@ export default function HomePage() {
             </div>
           )}
 
-          {!hasMore && !loading && videos.length > 0 && (
+          {/* THREE-STATE END MESSAGES */}
+
+          {/* State 1: Importing — some channels haven't finished ingestion */}
+          {!hasMore && !loading && videos.length > 0 && !allChannelsSynced && (
+            <div className="pt-6 pb-4 flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2 text-amber-500">
+                <Loader2 size={14} className="animate-spin" />
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Still importing videos — more will appear as channels finish syncing
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* State 2: Genuine end — all channels fully synced AND no more DB rows */}
+          {!hasMore && !loading && videos.length > 0 && allChannelsSynced && (
             <div className="pt-6 pb-4 flex justify-center">
               <p className="text-xs text-content-secondary">You&apos;ve reached the end of your feed</p>
             </div>

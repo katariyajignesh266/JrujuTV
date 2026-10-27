@@ -12,6 +12,12 @@ export interface Channel {
   is_active: boolean;
   created_at: string;
   last_synced_at: string | null;
+  // Resumable sync tracking (added in migration 006)
+  sync_status?: 'pending' | 'in_progress' | 'complete';
+  sync_page_token?: string | null;
+  synced_video_count?: number;
+  total_video_count?: number;
+  last_full_sync_at?: string | null;
   // UI aliases
   name?: string;
   avatarUrl?: string;
