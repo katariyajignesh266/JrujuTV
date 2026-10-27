@@ -11,7 +11,7 @@
  * To trigger a cache refresh on next deploy: bump CACHE_VERSION below.
  */
 
-const CACHE_VERSION = 'jruju-shell-v1';
+const CACHE_VERSION = 'jruju-shell-v2';
 
 /**
  * App shell resources pre-cached on SW install.

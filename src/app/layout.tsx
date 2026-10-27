@@ -35,10 +35,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // theme-color drives the browser chrome / Android status bar color
+  // theme-color drives the browser chrome / Android status bar & navigation bar color
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#E53935' },
-    { media: '(prefers-color-scheme: dark)',  color: '#E53935' },
+    { media: '(prefers-color-scheme: light)', color: '#FFFFFF' },
+    { media: '(prefers-color-scheme: dark)',  color: '#0F0F0F' },
   ],
 };
 
@@ -50,7 +50,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Prevent FOWT: apply stored theme before first paint */}
+        {/* Prevent FOWT: apply stored theme and sync theme-color before first paint */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -58,9 +58,18 @@ export default function RootLayout({
                 try {
                   var stored = JSON.parse(localStorage.getItem('jruju-ui') || '{}');
                   var theme = stored?.state?.theme;
-                  if (theme === 'dark') {
+                  var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  var isDark = theme === 'dark' || (!theme && prefersDark);
+                  if (isDark) {
                     document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
                   }
+                  var color = isDark ? '#0F0F0F' : '#FFFFFF';
+                  var metas = document.querySelectorAll('meta[name="theme-color"]');
+                  metas.forEach(function(m) {
+                    m.setAttribute('content', color);
+                  });
                 } catch(e) {}
               })();
             `,
