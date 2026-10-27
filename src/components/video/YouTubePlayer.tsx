@@ -43,6 +43,14 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 0 && window.innerWidth <= 1024)
+  );
+}
+
 export function YouTubePlayer({
   videoId,
   title,
@@ -309,13 +317,99 @@ export function YouTubePlayer({
     };
   }, [isSeeking, flushHeartbeat]);
 
-  // Fullscreen change listener — handles both standard API and rotation fallback
+  // ── Exit fullscreen callback ──
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (typeof document !== 'undefined' && document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      (screen.orientation as any)?.unlock?.();
+    } catch {
+      // ignore
+    }
+    setIsFullscreen(false);
+    setUseRotationFallback(false);
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+    }
+  }, []);
+
+  // ── Landscape Fullscreen: Mobile In-App Viewport + Desktop Fullscreen API ──
+  const toggleFullscreen = useCallback(async () => {
+    if (!containerRef.current) return;
+
+    if (isFullscreen) {
+      await exitFullscreen();
+      if (typeof window !== 'undefined' && window.history.state?.jrujuFullscreen) {
+        window.history.back();
+      }
+      return;
+    }
+
+    const mobile = isMobileDevice();
+
+    if (mobile) {
+      // On mobile / installed PWA: Use CSS Viewport Fullscreen instead of HTML5 document.requestFullscreen().
+      // This completely avoids the persistent Android Chrome security banner:
+      // "jrujutv.onrender.com — to exit full screen, drag from the top and touch the back button".
+      setIsFullscreen(true);
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = 'hidden';
+      }
+
+      // Push history state so Android physical / gesture back button cleanly exits fullscreen
+      try {
+        window.history.pushState({ jrujuFullscreen: true }, '');
+      } catch {
+        // ignore
+      }
+
+      // Try orientation lock if supported without OS fullscreen (e.g. standalone PWA)
+      let locked = false;
+      if (typeof screen !== 'undefined' && screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+        try {
+          await (screen.orientation as any).lock('landscape');
+          locked = true;
+        } catch {
+          // Standard mobile Chrome requires requestFullscreen for orientation.lock
+        }
+      }
+
+      const isLandscape = typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false;
+
+      // If not locked and in portrait, rotate 90° with CSS to display in landscape
+      if (!locked && !isLandscape) {
+        setUseRotationFallback(true);
+      } else {
+        setUseRotationFallback(false);
+      }
+    } else {
+      // Desktop: Standard HTML5 Fullscreen API
+      try {
+        await containerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+      } catch (err) {
+        console.error('Fullscreen error:', err);
+        // Fallback to in-app fullscreen
+        setIsFullscreen(true);
+      }
+    }
+  }, [isFullscreen, exitFullscreen]);
+
+  // Desktop HTML5 Fullscreen change listener
   useEffect(() => {
     const handleFsChange = () => {
       const isFs = !!document.fullscreenElement;
-      setIsFullscreen(isFs);
-      if (!isFs && useRotationFallback) {
+      if (!isFs && !isMobileDevice()) {
+        setIsFullscreen(false);
         setUseRotationFallback(false);
+        if (typeof document !== 'undefined') {
+          document.body.style.overflow = '';
+        }
       }
     };
     document.addEventListener('fullscreenchange', handleFsChange);
@@ -324,7 +418,79 @@ export function YouTubePlayer({
       document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('webkitfullscreenchange', handleFsChange);
     };
-  }, [useRotationFallback]);
+  }, []);
+
+  // PopState listener — pressing Android back button / gesture exits fullscreen
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isFullscreen) {
+        exitFullscreen();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isFullscreen, exitFullscreen]);
+
+  // Orientation change / window resize listener when in fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleOrientationOrResize = () => {
+      const isLandscape = window.innerWidth > window.innerHeight;
+      if (isLandscape) {
+        // Device is physically in landscape — no rotation transform needed
+        setUseRotationFallback(false);
+      } else if (isMobileDevice()) {
+        // Device is held in portrait — rotate 90° with CSS
+        setUseRotationFallback(true);
+      }
+    };
+
+    window.addEventListener('resize', handleOrientationOrResize);
+    window.addEventListener('orientationchange', handleOrientationOrResize);
+    return () => {
+      window.removeEventListener('resize', handleOrientationOrResize);
+      window.removeEventListener('orientationchange', handleOrientationOrResize);
+    };
+  }, [isFullscreen]);
+
+  // Keyboard shortcut listener ('f' to toggle fullscreen, 'Escape' to exit)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable)) {
+        return;
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === 'Escape' && isFullscreen) {
+        e.preventDefault();
+        exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [toggleFullscreen, exitFullscreen, isFullscreen]);
+
+  // Clean up body scroll lock and orientation lock on unmount
+  useEffect(() => {
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = '';
+      }
+      try {
+        (screen.orientation as any)?.unlock?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
 
   /* ── Item 9: Skip ±10s ── */
   const skipTime = (delta: number) => {
@@ -452,48 +618,6 @@ export function YouTubePlayer({
     }
   };
 
-  /* ── Item 6: True landscape fullscreen with orientation lock + CSS fallback ── */
-  const toggleFullscreen = async () => {
-    if (!containerRef.current) return;
-    try {
-      if (!document.fullscreenElement) {
-        // Enter fullscreen
-        await containerRef.current.requestFullscreen();
-        // Try to lock orientation to landscape (Android Chrome supports this)
-        try {
-          await (screen.orientation as any).lock('landscape');
-        } catch {
-          /* Item 6 fallback: screen.orientation.lock() is not supported on this
-             platform (notably iOS Safari). Apply CSS rotation fallback. */
-          setUseRotationFallback(true);
-        }
-      } else {
-        // Exit fullscreen
-        try {
-          (screen.orientation as any).unlock();
-        } catch {
-          // ignore — unlock may not be available
-        }
-        setUseRotationFallback(false);
-        await document.exitFullscreen();
-      }
-    } catch (err) {
-      console.error('Fullscreen error:', err);
-      // iOS Safari fallback: use webkitEnterFullscreen if available
-      const iframe = containerRef.current?.querySelector('iframe');
-      if (iframe && (iframe as any).webkitEnterFullscreen) {
-        try {
-          (iframe as any).webkitEnterFullscreen();
-        } catch {
-          // final fallback: just toggle our CSS fullscreen state manually
-          setIsFullscreen((prev) => !prev);
-          if (!isFullscreen) setUseRotationFallback(true);
-          else setUseRotationFallback(false);
-        }
-      }
-    }
-  };
-
   const progressFraction = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -504,31 +628,10 @@ export function YouTubePlayer({
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
         'relative w-full aspect-video bg-black overflow-hidden select-none group',
-        /* Item 7: No rounding or border in normal view for edge-to-edge treatment */
-        isFullscreen
-          ? 'fixed inset-0 z-[500] aspect-auto h-screen w-screen'
-          : '',
-        /* Item 6: CSS rotation fallback for platforms without orientation lock (iOS Safari).
-           When active in fullscreen, rotate the player 90° and swap width/height to achieve
-           landscape viewing in a portrait-locked viewport. */
-        isFullscreen && useRotationFallback && 'rotate-90-fullscreen'
+        /* Fullscreen handling */
+        isFullscreen && !useRotationFallback && 'player-fullscreen-landscape',
+        isFullscreen && useRotationFallback && 'player-rotate-landscape'
       )}
-      style={
-        isFullscreen && useRotationFallback
-          ? {
-              transform: 'rotate(90deg)',
-              transformOrigin: 'center center',
-              width: '100vh',
-              height: '100vw',
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              marginTop: 'calc(-50vw)',
-              marginLeft: 'calc(-50vh)',
-              zIndex: 500,
-            }
-          : undefined
-      }
     >
       {/* ── 1. The Underlying YouTube IFrame ── */}
       <div className="absolute inset-0 pointer-events-none">

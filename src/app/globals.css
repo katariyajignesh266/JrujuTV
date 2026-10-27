@@ -168,4 +168,31 @@ select:focus-visible {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* ─── Video Player Landscape & Fullscreen Utilities ─────────────────── */
+  .player-fullscreen-landscape {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    width: 100dvw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 9999 !important;
+    background-color: #000000 !important;
+  }
+
+  .player-rotate-landscape {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    width: 100vh !important;
+    width: 100dvh !important;
+    height: 100vw !important;
+    height: 100dvw !important;
+    transform: translate(-50%, -50%) rotate(90deg) !important;
+    transform-origin: center center !important;
+    z-index: 9999 !important;
+    background-color: #000000 !important;
+  }
 }
+
