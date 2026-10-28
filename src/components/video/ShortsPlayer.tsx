@@ -1,9 +1,10 @@
+// src/components/video/ShortsPlayer.tsx
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Image from 'next/image';
-import { Volume2, VolumeX, Loader2 } from 'lucide-react';
+import { Play, Pause, Heart, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useShortsStore } from '@/store/shortsStore';
 
 declare global {
   interface Window {
@@ -29,19 +30,27 @@ export function ShortsPlayer({
 }: ShortsPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+
+  const { isMuted, markWatched, toggleLike } = useShortsStore();
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [hasStartedPlaying, setHasStartedPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showMuteIndicator, setShowMuteIndicator] = useState(false);
-  const muteIndicatorTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Micro-animations state
+  const [tapAnimation, setTapAnimation] = useState<'play' | 'pause' | null>(null);
+  const [showHeartAnim, setShowHeartAnim] = useState(false);
+  const lastTapRef = useRef<number>(0);
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isActiveRef = useRef(isActive);
   isActiveRef.current = isActive;
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
 
-  // Ensure YouTube IFrame API is loaded
+  // Ensure YouTube IFrame API is loaded once
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -59,25 +68,25 @@ export function ShortsPlayer({
     }
   }, []);
 
-  // Initialize player instance
+  // Initialize YouTube player instance
   useEffect(() => {
     let isCancelled = false;
 
     const initPlayer = () => {
       if (!window.YT || !window.YT.Player || !containerRef.current || isCancelled) return;
 
-      // Clean up existing player if any
+      // Clean up previous instance
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
         } catch {
-          // ignore destroy errors
+          // ignore
         }
         playerRef.current = null;
       }
 
       const playerDiv = document.createElement('div');
-      playerDiv.className = 'w-full h-full';
+      playerDiv.className = 'w-full h-full pointer-events-none';
       containerRef.current.innerHTML = '';
       containerRef.current.appendChild(playerDiv);
 
@@ -85,7 +94,7 @@ export function ShortsPlayer({
         videoId,
         playerVars: {
           autoplay: isActiveRef.current ? 1 : 0,
-          controls: 0,
+          controls: 0, // Disable native controls
           disablekb: 1,
           fs: 0,
           iv_load_policy: 3,
@@ -96,19 +105,26 @@ export function ShortsPlayer({
           origin: typeof window !== 'undefined' ? window.location.origin : '',
           enablejsapi: 1,
           loop: 1,
-          playlist: videoId, // needed for single video loop
+          playlist: videoId,
         },
         events: {
           onReady: (event: any) => {
             if (isCancelled) return;
             setIsReady(true);
+
+            // Sync initial mute state
+            if (isMutedRef.current) {
+              event.target.mute();
+            } else {
+              event.target.unMute();
+            }
+
             if (isActiveRef.current) {
               try {
                 event.target.playVideo();
               } catch {
-                // browser autoplay policy might require mute
+                // In case mobile autoplay blocks unmuted audio
                 event.target.mute();
-                setIsMuted(true);
                 event.target.playVideo();
               }
             }
@@ -151,7 +167,7 @@ export function ShortsPlayer({
         playerRef.current = null;
       }
     };
-  }, [videoId]); // Re-create on videoId change
+  }, [videoId]); // Re-create when videoId changes
 
   // React to isActive changes (scrolling into / out of view)
   useEffect(() => {
@@ -159,10 +175,22 @@ export function ShortsPlayer({
 
     if (isActive) {
       try {
+        if (isMuted) {
+          playerRef.current.mute();
+        } else {
+          playerRef.current.unMute();
+        }
         playerRef.current.playVideo();
       } catch {
-        // Fallback if needed
+        // Fallback
       }
+
+      // Mark video as watched after 3 seconds of active viewing
+      const timer = setTimeout(() => {
+        markWatched(videoId);
+      }, 3000);
+
+      return () => clearTimeout(timer);
     } else {
       try {
         playerRef.current.pauseVideo();
@@ -170,94 +198,120 @@ export function ShortsPlayer({
         // Fallback
       }
     }
-  }, [isActive, isReady]);
+  }, [isActive, isReady, isMuted, videoId, markWatched]);
 
-  // Toggle mute handler (tap sound button)
-  const toggleMute = useCallback(() => {
-    if (!playerRef.current) return;
+  // Sync mute state dynamically across all shorts
+  useEffect(() => {
+    if (!playerRef.current || !isReady) return;
     try {
       if (isMuted) {
-        playerRef.current.unMute();
-        setIsMuted(false);
-      } else {
         playerRef.current.mute();
-        setIsMuted(true);
+      } else {
+        playerRef.current.unMute();
       }
-      setShowMuteIndicator(true);
-      if (muteIndicatorTimer.current) clearTimeout(muteIndicatorTimer.current);
-      muteIndicatorTimer.current = setTimeout(() => {
-        setShowMuteIndicator(false);
-      }, 1500);
     } catch {
       // ignore
     }
-  }, [isMuted]);
+  }, [isMuted, isReady]);
+
+  // Handle single tap (Play/Pause) vs double tap (Like)
+  const handleTouchSurface = () => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected: Like video!
+      if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
+      toggleLike(videoId);
+      setShowHeartAnim(true);
+      setTimeout(() => setShowHeartAnim(false), 800);
+      lastTapRef.current = 0;
+      return;
+    }
+
+    lastTapRef.current = now;
+
+    tapTimeoutRef.current = setTimeout(() => {
+      // Single tap: toggle Play/Pause
+      if (!playerRef.current || !isReady) return;
+
+      if (isPlaying) {
+        playerRef.current.pauseVideo();
+        setTapAnimation('pause');
+      } else {
+        playerRef.current.playVideo();
+        setTapAnimation('play');
+      }
+
+      setTimeout(() => setTapAnimation(null), 500);
+    }, DOUBLE_TAP_DELAY);
+  };
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden select-none">
-      {/* 1. Oversized Iframe Player Container (Scale 1.05 to eliminate any YouTube embed watermarks/borders) */}
-      <div className="absolute inset-0 w-full h-full scale-[1.04] origin-center flex items-center justify-center pointer-events-none">
-        <div ref={containerRef} className="w-full h-full pointer-events-auto" />
+    <div className="relative w-full h-full bg-black overflow-hidden select-none flex items-center justify-center">
+      {/* 1. Ambient Blurred Backdrop for Full-Coverage Visual Immersion */}
+      {thumbnailUrl && (
+        <div
+          className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-40 pointer-events-none"
+          style={{ backgroundImage: `url(${thumbnailUrl})` }}
+        />
+      )}
+
+      {/* 2. YouTube IFrame Player (Strictly pointer-events-none to prevent native YT overlay) */}
+      <div className="absolute inset-0 w-full h-full scale-[1.06] origin-center flex items-center justify-center pointer-events-none overflow-hidden">
+        <div ref={containerRef} className="w-full h-full pointer-events-none" />
       </div>
 
-      {/* 2. Flash-prevention Thumbnail Crossfade Layer */}
+      {/* 3. Instant Thumbnail Layer with Smooth Crossfade on First Frame */}
       {thumbnailUrl && (
         <div
           className={cn(
-            'absolute inset-0 z-10 transition-opacity duration-300 pointer-events-none',
+            'absolute inset-0 z-10 transition-opacity duration-300 pointer-events-none flex items-center justify-center',
             hasStartedPlaying ? 'opacity-0' : 'opacity-100'
           )}
         >
-          {/* Blurred background image for full coverage */}
-          <div
-            className="absolute inset-0 bg-cover bg-center filter blur-lg scale-110 opacity-60"
-            style={{ backgroundImage: `url(${thumbnailUrl})` }}
-          />
           {/* Main crisp thumbnail */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={thumbnailUrl}
-              alt={title || 'Short thumbnail'}
-              className="w-full h-full object-contain"
-            />
-          </div>
-          {/* Loading spinner while preparing playback */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={thumbnailUrl}
+            alt={title || 'Short thumbnail'}
+            className="w-full h-full object-contain pointer-events-none"
+          />
+
+          {/* Buffering Spinner */}
           {!hasStartedPlaying && isActive && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
               <Loader2 className="w-10 h-10 text-brand-primary animate-spin" />
             </div>
           )}
         </div>
       )}
 
-      {/* 3. Tap to toggle mute & audio status overlay */}
-      <div className="absolute top-4 right-4 z-20">
-        <button
-          type="button"
-          onClick={toggleMute}
-          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md text-white/90 border border-white/20 hover:bg-black/80 active:scale-95 transition-all shadow-lg"
-          aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-        >
-          {isMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5" />}
-        </button>
-      </div>
+      {/* 4. Custom Touch/Click Interaction Surface */}
+      <div
+        onClick={handleTouchSurface}
+        className="absolute inset-0 z-20 cursor-pointer pointer-events-auto"
+        aria-label="Tap to play or pause, double tap to like"
+      />
 
-      {/* Brief Mute/Unmute Indicator Toast in Center */}
-      {showMuteIndicator && (
-        <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center animate-fade-in">
-          <div className="p-4 rounded-full bg-black/75 backdrop-blur-md text-white flex items-center gap-2 border border-white/20 shadow-xl">
-            {isMuted ? (
-              <>
-                <VolumeX className="w-6 h-6 text-red-400" />
-                <span className="text-fluid-xs font-semibold">Muted</span>
-              </>
+      {/* 5. Sleek Play/Pause Micro-Animation Badge in Center */}
+      {tapAnimation && (
+        <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center animate-scale-fade">
+          <div className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-md border border-white/25 flex items-center justify-center text-white shadow-2xl">
+            {tapAnimation === 'play' ? (
+              <Play className="w-8 h-8 fill-white ml-1" />
             ) : (
-              <>
-                <Volume2 className="w-6 h-6 text-emerald-400" />
-                <span className="text-fluid-xs font-semibold">Sound On</span>
-              </>
+              <Pause className="w-8 h-8 fill-white" />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 6. Double Tap Heart Burst Animation */}
+      {showHeartAnim && (
+        <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center animate-bounce-heart">
+          <div className="w-24 h-24 rounded-full bg-red-500/20 backdrop-blur-sm flex items-center justify-center">
+            <Heart className="w-16 h-16 text-red-500 fill-red-500 drop-shadow-xl" />
           </div>
         </div>
       )}

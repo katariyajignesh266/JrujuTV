@@ -1,3 +1,4 @@
+// src/app/shorts/page.tsx
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -5,14 +6,18 @@ import Link from 'next/link';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ShortsPlayer } from '@/components/video/ShortsPlayer';
+import { ShortsActionRail } from '@/components/video/ShortsActionRail';
+import { ShortsCommentsModal } from '@/components/video/ShortsCommentsModal';
 import { Zap, ChevronUp, ChevronDown, Plus, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useShortsStore } from '@/store/shortsStore';
 import { Video } from '@/types/content';
 import { cn } from '@/lib/cn';
 import { formatViewCount } from '@/lib/formatters';
 
 export default function ShortsPage() {
   const { role, initialized } = useAuthStore();
+  const { watchedIds } = useShortsStore();
   const [shorts, setShorts] = useState<Video[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -21,13 +26,14 @@ export default function ShortsPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Load shorts feed
+  // Load shorts feed with watched exclusion for continuous non-repeating recommendations
   useEffect(() => {
     let isMounted = true;
     async function loadShorts() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/feed/shorts?seed=${seed}&pageSize=30`);
+        const excludeParam = watchedIds.length > 0 ? `&excludeIds=${encodeURIComponent(watchedIds.slice(-100).join(','))}` : '';
+        const res = await fetch(`/api/feed/shorts?seed=${seed}&pageSize=35${excludeParam}`);
         const data = await res.json();
         if (isMounted && data.videos) {
           setShorts(data.videos);
@@ -45,7 +51,8 @@ export default function ShortsPage() {
     return () => {
       isMounted = false;
     };
-  }, [initialized, seed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized, seed]); // Intentionally preserve feed during watchedId updates
 
   // Track which short is in view using IntersectionObserver
   useEffect(() => {
@@ -65,7 +72,7 @@ export default function ShortsPage() {
       },
       {
         root: container,
-        threshold: 0.6,
+        threshold: 0.65,
       }
     );
 
@@ -98,7 +105,7 @@ export default function ShortsPage() {
     }
   }, [activeIndex, scrollToIndex]);
 
-  // Keyboard navigation
+  // Desktop keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
@@ -114,15 +121,16 @@ export default function ShortsPage() {
   }, [handleNext, handlePrev]);
 
   return (
-    <PageShell className="p-0 sm:p-0 md:px-6 md:pt-4">
-      <div className="relative w-full flex items-center justify-center -mx-3 sm:-mx-4 md:mx-auto -mt-4 md:mt-0">
+    <PageShell className="p-0 sm:p-0 md:px-6 md:pt-4 pb-0 md:pb-6 overflow-hidden">
+      {/* Outer Viewport Wrapper — Eliminates all negative margin shifts */}
+      <div className="relative w-full flex items-center justify-center mx-auto overflow-hidden">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-[calc(100dvh-56px-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5rem)] space-y-3">
+          <div className="flex flex-col items-center justify-center w-full h-[calc(100dvh-48px-56px-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5.5rem)] space-y-3 bg-black text-white">
             <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
-            <p className="text-fluid-sm text-content-secondary">Loading short videos…</p>
+            <p className="text-fluid-sm text-neutral-400">Loading shorts…</p>
           </div>
         ) : shorts.length === 0 ? (
-          <div className="flex items-center justify-center h-[calc(100dvh-56px-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5rem)] px-4">
+          <div className="flex items-center justify-center w-full h-[calc(100dvh-48px-56px-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5.5rem)] px-4">
             <div className="max-w-md w-full text-center space-y-4">
               <EmptyState
                 icon={Zap}
@@ -147,15 +155,16 @@ export default function ShortsPage() {
             </div>
           </div>
         ) : (
-          <div className="relative w-full max-w-full md:max-w-md h-[calc(100dvh-56px-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5rem)] flex items-center justify-center">
+          /* Main Shorts Mobile Frame: Exact Viewport calculation without bottom nav collision */
+          <div className="relative w-full max-w-full md:max-w-[420px] h-[calc(100dvh-48px-56px-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5.5rem)] flex items-center justify-center md:rounded-3xl md:overflow-hidden md:shadow-2xl md:border md:border-neutral-800 bg-black">
             {/* Vertical Snap-Scroll Feed Container */}
             <div
               ref={scrollContainerRef}
               className="relative w-full h-full overflow-y-auto snap-y snap-mandatory bg-black select-none scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
             >
               {shorts.map((short, index) => {
-                // Keep players within active window (+/- 1) to conserve memory while allowing seamless swipe
-                const isWithinRenderWindow = Math.abs(index - activeIndex) <= 1;
+                // Preload window: keep previous 1, active, and PRELOAD NEXT 2 VIDEOS for zero latency
+                const isWithinRenderWindow = index >= activeIndex - 1 && index <= activeIndex + 2;
                 const isCurrentActive = index === activeIndex;
 
                 return (
@@ -167,8 +176,8 @@ export default function ShortsPage() {
                     }}
                     className="relative w-full h-full snap-start snap-always shrink-0 bg-black flex flex-col justify-between overflow-hidden"
                   >
-                    {/* Video Player or Thumbnail */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black">
+                    {/* Video Player or Preloaded High-Res Thumbnail */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black overflow-hidden">
                       {isWithinRenderWindow ? (
                         <ShortsPlayer
                           videoId={short.youtube_video_id}
@@ -184,14 +193,25 @@ export default function ShortsPage() {
                           <img
                             src={short.thumbnail_url}
                             alt={short.title}
-                            className="w-full h-full object-cover filter blur-sm opacity-50"
+                            className="w-full h-full object-cover filter blur-md opacity-40"
                           />
                         )
                       )}
                     </div>
 
-                    {/* Bottom Metadata Overlay */}
-                    <div className="absolute inset-x-0 bottom-0 z-20 p-4 pb-6 bg-gradient-to-t from-black/95 via-black/50 to-transparent pointer-events-none text-white space-y-2">
+                    {/* Right Action Rail (Like, Comment, Share, Sound) */}
+                    <ShortsActionRail
+                      videoId={short.youtube_video_id || short.id}
+                      title={short.title}
+                      channelName={short.channelName}
+                      channelAvatarUrl={short.channelAvatarUrl}
+                      likeCount={short.view_count ? Math.round(short.view_count * 0.08) : 840}
+                      className="absolute right-3 bottom-20 md:bottom-16"
+                    />
+
+                    {/* Bottom Metadata Overlay — Padded cleanly above the bottom navigation bar */}
+                    <div className="absolute inset-x-0 bottom-0 z-20 p-4 pb-6 pr-20 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none text-white space-y-2">
+                      {/* Channel Info */}
                       <div className="flex items-center gap-2.5">
                         <div className="h-9 w-9 rounded-full overflow-hidden bg-white/20 border border-white/30 shrink-0">
                           {short.channelAvatarUrl ? (
@@ -207,21 +227,25 @@ export default function ShortsPage() {
                             </div>
                           )}
                         </div>
-                        <span className="font-semibold text-fluid-sm drop-shadow-md truncate">
+                        <span className="font-semibold text-fluid-sm drop-shadow-md truncate text-white">
                           {short.channelName}
                         </span>
                       </div>
 
-                      <p className="font-medium text-fluid-sm text-white/95 line-clamp-2 drop-shadow-md">
+                      {/* Video Title */}
+                      <p className="font-medium text-fluid-sm text-white/95 line-clamp-2 drop-shadow-md leading-snug">
                         {short.title}
                       </p>
 
+                      {/* Counter & Views */}
                       <div className="flex items-center gap-2 text-[11px] text-white/80 font-mono">
-                        <span>Short {index + 1} of {shorts.length}</span>
+                        <span className="bg-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm text-white">
+                          Short {index + 1} of {shorts.length}
+                        </span>
                         {short.view_count !== undefined && (
                           <>
                             <span>·</span>
-                            <span>{formatViewCount(short.view_count)}</span>
+                            <span>{formatViewCount(short.view_count)} views</span>
                           </>
                         )}
                       </div>
@@ -265,6 +289,9 @@ export default function ShortsPage() {
           </div>
         )}
       </div>
+
+      {/* Global Kid-friendly Comments Sheet */}
+      <ShortsCommentsModal />
     </PageShell>
   );
 }

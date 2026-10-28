@@ -11,6 +11,13 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
     const seedParam = searchParams.get('seed');
     const seed = seedParam ? parseInt(seedParam, 10) : Math.floor(Math.random() * 1000000);
+    const excludeIdsParam = searchParams.get('excludeIds') || '';
+    const excludeSet = new Set(
+      excludeIdsParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
 
     const supabase = await createClient();
 
@@ -41,11 +48,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: vidErr.message }, { status: 500 });
     }
 
-    // 3. Group by channel_id
+    // 3. Separate unwatched vs watched shorts if excludeSet is provided
+    let candidateVideos = rawVideos || [];
+    if (excludeSet.size > 0 && candidateVideos.length > 0) {
+      const unwatched = candidateVideos.filter(
+        (v) => !excludeSet.has(v.id) && !excludeSet.has(v.youtube_video_id)
+      );
+      const watched = candidateVideos.filter(
+        (v) => excludeSet.has(v.id) || excludeSet.has(v.youtube_video_id)
+      );
+
+      // If we have enough unwatched shorts, prioritize them exclusively
+      if (unwatched.length >= 15) {
+        candidateVideos = unwatched;
+      } else {
+        // If unwatched are few, put unwatched first, followed by recycled watched shorts
+        candidateVideos = [...unwatched, ...watched];
+      }
+    }
+
+    // 4. Group by channel_id
     const channelMap = new Map(channels.map((c) => [c.id, c]));
     const channelVideosMap = new Map<string, Video[]>();
 
-    for (const v of rawVideos || []) {
+    for (const v of candidateVideos) {
       const ch = channelMap.get(v.channel_id);
       const enhancedVideo: Video = {
         ...v,
@@ -66,7 +92,7 @@ export async function GET(req: NextRequest) {
       channelVideosMap.get(v.channel_id)!.push(enhancedVideo);
     }
 
-    // 4. Run seeded round-robin shuffle interleaving
+    // 5. Run seeded round-robin shuffle interleaving
     const result = interleaveChannelVideos(channelVideosMap, seed, page, pageSize);
 
     return NextResponse.json({
