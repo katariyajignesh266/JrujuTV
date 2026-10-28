@@ -320,18 +320,8 @@ export function YouTubePlayer({
   // ── Exit fullscreen callback ──
   const exitFullscreen = useCallback(async () => {
     try {
-      if (
-        typeof document !== 'undefined' &&
-        (document.fullscreenElement ||
-          (document as any).webkitFullscreenElement ||
-          (document as any).mozFullScreenElement ||
-          (document as any).msFullscreenElement)
-      ) {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        }
+      if (typeof document !== 'undefined' && document.fullscreenElement) {
+        await document.exitFullscreen();
       }
     } catch {
       // ignore
@@ -350,8 +340,7 @@ export function YouTubePlayer({
 
   // ── Landscape Fullscreen: Mobile In-App Viewport + Desktop Fullscreen API ──
   const toggleFullscreen = useCallback(async () => {
-    const el = containerRef.current;
-    if (!el) return;
+    if (!containerRef.current) return;
 
     if (isFullscreen) {
       await exitFullscreen();
@@ -361,94 +350,65 @@ export function YouTubePlayer({
       return;
     }
 
-    setIsFullscreen(true);
-    if (typeof document !== 'undefined') {
-      document.body.style.overflow = 'hidden';
-    }
+    const mobile = isMobileDevice();
 
-    // Push history state so Android physical / gesture back button cleanly exits fullscreen
-    try {
-      window.history.pushState({ jrujuFullscreen: true }, '');
-    } catch {
-      // ignore
-    }
-
-    // 1. Request native HTML5 Fullscreen first on both mobile & desktop.
-    // This instructs Android / OS to hide the system status bar, battery, clock, and navigation UI.
-    let nativeFsSucceeded = false;
-    try {
-      const requestFs =
-        el.requestFullscreen ||
-        (el as any).webkitRequestFullscreen ||
-        (el as any).webkitEnterFullscreen ||
-        (el as any).msRequestFullscreen;
-
-      if (requestFs) {
-        await requestFs.call(el, { navigationUI: 'hide' });
-        nativeFsSucceeded = true;
+    if (mobile) {
+      // On mobile / installed PWA: Use CSS Viewport Fullscreen instead of HTML5 document.requestFullscreen().
+      // This completely avoids the persistent Android Chrome security banner:
+      // "jrujutv.onrender.com — to exit full screen, drag from the top and touch the back button".
+      setIsFullscreen(true);
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = 'hidden';
       }
-    } catch (err) {
-      console.warn('Native requestFullscreen failed or was rejected:', err);
-    }
 
-    // 2. Lock screen orientation to landscape.
-    // On Android Chrome / modern mobile browsers, screen.orientation.lock('landscape')
-    // works once the element is in fullscreen, automatically rotating the display physically
-    // to landscape and keeping the system status bar completely hidden.
-    let locked = false;
-    if (
-      typeof screen !== 'undefined' &&
-      screen.orientation &&
-      typeof (screen.orientation as any).lock === 'function'
-    ) {
+      // Push history state so Android physical / gesture back button cleanly exits fullscreen
       try {
-        await (screen.orientation as any).lock('landscape');
-        locked = true;
-      } catch (err) {
-        console.warn('screen.orientation.lock failed:', err);
+        window.history.pushState({ jrujuFullscreen: true }, '');
+      } catch {
+        // ignore
       }
-    }
 
-    const isLandscape = typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false;
+      // Try orientation lock if supported without OS fullscreen (e.g. standalone PWA)
+      let locked = false;
+      if (typeof screen !== 'undefined' && screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+        try {
+          await (screen.orientation as any).lock('landscape');
+          locked = true;
+        } catch {
+          // Standard mobile Chrome requires requestFullscreen for orientation.lock
+        }
+      }
 
-    // 3. Fallback CSS rotation: ONLY use 90° CSS rotation if native fullscreen failed
-    // AND orientation lock failed AND the phone is physically held in portrait.
-    if (!nativeFsSucceeded && !locked && !isLandscape) {
-      setUseRotationFallback(true);
+      const isLandscape = typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false;
+
+      // If not locked and in portrait, rotate 90° with CSS to display in landscape
+      if (!locked && !isLandscape) {
+        setUseRotationFallback(true);
+      } else {
+        setUseRotationFallback(false);
+      }
     } else {
-      setUseRotationFallback(false);
+      // Desktop: Standard HTML5 Fullscreen API
+      try {
+        await containerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+      } catch (err) {
+        console.error('Fullscreen error:', err);
+        // Fallback to in-app fullscreen
+        setIsFullscreen(true);
+      }
     }
   }, [isFullscreen, exitFullscreen]);
 
-  // Fullscreen change listener (handles both entering and exiting native fullscreen)
+  // Desktop HTML5 Fullscreen change listener
   useEffect(() => {
     const handleFsChange = () => {
-      const isFs = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
-      );
-      if (!isFs) {
+      const isFs = !!document.fullscreenElement;
+      if (!isFs && !isMobileDevice()) {
         setIsFullscreen(false);
         setUseRotationFallback(false);
         if (typeof document !== 'undefined') {
           document.body.style.overflow = '';
-        }
-        try {
-          (screen.orientation as any)?.unlock?.();
-        } catch {
-          // ignore
-        }
-      } else {
-        setIsFullscreen(true);
-        // Once native fullscreen is active, try locking orientation to landscape
-        if (
-          typeof screen !== 'undefined' &&
-          screen.orientation &&
-          typeof (screen.orientation as any).lock === 'function'
-        ) {
-          (screen.orientation as any).lock('landscape').catch(() => {});
         }
       }
     };
@@ -479,16 +439,11 @@ export function YouTubePlayer({
 
     const handleOrientationOrResize = () => {
       const isLandscape = window.innerWidth > window.innerHeight;
-      const isNativeFs = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement
-      );
-
-      if (isLandscape || isNativeFs) {
-        // Device is physically in landscape or in native OS fullscreen — do not rotate with CSS
+      if (isLandscape) {
+        // Device is physically in landscape — no rotation transform needed
         setUseRotationFallback(false);
       } else if (isMobileDevice()) {
-        // Device is held in portrait without native fullscreen — rotate 90° with CSS
+        // Device is held in portrait — rotate 90° with CSS
         setUseRotationFallback(true);
       }
     };
@@ -674,8 +629,8 @@ export function YouTubePlayer({
       className={cn(
         'relative w-full aspect-video bg-black overflow-hidden select-none group',
         /* Fullscreen handling */
-        isFullscreen && !useRotationFallback && 'player-fullscreen-landscape !aspect-auto',
-        isFullscreen && useRotationFallback && 'player-rotate-landscape !aspect-auto'
+        isFullscreen && !useRotationFallback && 'player-fullscreen-landscape',
+        isFullscreen && useRotationFallback && 'player-rotate-landscape'
       )}
     >
       {/* ── 1. The Underlying YouTube IFrame ── */}
@@ -729,7 +684,6 @@ export function YouTubePlayer({
       <div
         className={cn(
           'absolute inset-x-0 bottom-0 z-20 flex flex-col justify-end p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 pointer-events-auto',
-          isFullscreen && 'pb-[max(1rem,env(safe-area-inset-bottom))] px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]',
           showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
       >

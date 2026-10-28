@@ -170,9 +170,7 @@ select:focus-visible {
   }
 
   /* ─── Video Player Landscape & Fullscreen Utilities ─────────────────── */
-  .player-fullscreen-landscape,
-  :fullscreen.player-fullscreen-landscape,
-  :-webkit-full-screen.player-fullscreen-landscape {
+  .player-fullscreen-landscape {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
@@ -181,15 +179,6 @@ select:focus-visible {
     height: 100dvh !important;
     z-index: 9999 !important;
     background-color: #000000 !important;
-    aspect-ratio: unset !important;
-  }
-
-  .player-fullscreen-landscape iframe,
-  .player-rotate-landscape iframe,
-  :fullscreen iframe,
-  :-webkit-full-screen iframe {
-    width: 100% !important;
-    height: 100% !important;
   }
 
   .player-rotate-landscape {
@@ -204,7 +193,6 @@ select:focus-visible {
     transform-origin: center center !important;
     z-index: 9999 !important;
     background-color: #000000 !important;
-    aspect-ratio: unset !important;
   }
 }
 
