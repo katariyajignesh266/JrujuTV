@@ -4,6 +4,30 @@ import { createClient } from '@/lib/supabase/server';
 import { Video } from '@/types/content';
 import { formatDuration } from '@/lib/formatters';
 
+/**
+ * Fetch video IDs the child has watched ≥90% of.
+ * Returns an empty array for unauthenticated sessions or non-child roles.
+ */
+async function fetchCompletedVideoIds(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const role = user.user_metadata?.role ?? (user as any).role;
+    if (role !== 'child') return [];
+
+    const { data, error } = await supabase.rpc('get_child_completed_video_ids', {
+      p_child_id: user.id,
+    });
+
+    if (error || !data) return [];
+    // data is UUID[], cast to string[]
+    return (data as string[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 interface ChannelCursor {
   published_at: string;
   id: string;
@@ -64,6 +88,11 @@ export async function GET(req: NextRequest) {
 
     const supabase = await createClient();
 
+    // Fetch completed video IDs for the logged-in child (progress ≥ 90%).
+    // Runs in parallel with the channel fetch below to avoid extra round-trip latency.
+    const completedVideoIdsPromise = fetchCompletedVideoIds(supabase);
+
+    // Channel fetch (parallel with completedVideoIds above)
     let channels = null;
     let chErr = null;
 
@@ -84,6 +113,10 @@ export async function GET(req: NextRequest) {
       channels = initialFetch.data;
       chErr = initialFetch.error;
     }
+
+    // Await completed IDs (was kicked off in parallel)
+    const completedVideoIds: string[] = await completedVideoIdsPromise;
+    const completedSet = new Set<string>(completedVideoIds);
 
     if (chErr) {
       return NextResponse.json({ error: chErr.message }, { status: 500 });
@@ -120,7 +153,8 @@ export async function GET(req: NextRequest) {
           p_channel_ids: channelIds,
           p_channel_cursors: cursors,
           p_limit: pageSize,
-          p_min_duration: 300, // User-specified 5-minute requirement
+          p_min_duration: 300,                         // ≥5 minutes
+          p_exclude_video_ids: completedVideoIds,       // ← exclude watched ≥90%
         }
       );
 
@@ -172,6 +206,11 @@ export async function GET(req: NextRequest) {
           .order('published_at', { ascending: false })
           .order('id', { ascending: false })
           .limit(perChannelLimit + 1);
+
+        // Exclude videos the child has already watched ≥90%
+        if (completedVideoIds.length > 0) {
+          query = query.not('id', 'in', `(${completedVideoIds.join(',')}`);
+        }
 
         const cur = cursors[cid];
         if (cur && cur.published_at && cur.id) {

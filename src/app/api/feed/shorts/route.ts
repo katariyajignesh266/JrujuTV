@@ -4,6 +4,29 @@ import { createClient } from '@/lib/supabase/server';
 import { interleaveChannelVideos } from '@/lib/feedAlgorithm';
 import { Video } from '@/types/content';
 
+/**
+ * Fetch video IDs the child has watched ≥90% of.
+ * Returns an empty array for unauthenticated sessions or non-child roles.
+ */
+async function fetchCompletedVideoIds(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const role = user.user_metadata?.role ?? (user as any).role;
+    if (role !== 'child') return [];
+
+    const { data, error } = await supabase.rpc('get_child_completed_video_ids', {
+      p_child_id: user.id,
+    });
+
+    if (error || !data) return [];
+    return (data as string[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -11,8 +34,9 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
     const seedParam = searchParams.get('seed');
     const seed = seedParam ? parseInt(seedParam, 10) : Math.floor(Math.random() * 1000000);
+    // Legacy excludeIds from query param (client-side dedup, kept for backwards compat)
     const excludeIdsParam = searchParams.get('excludeIds') || '';
-    const excludeSet = new Set(
+    const clientExcludeSet = new Set(
       excludeIdsParam
         .split(',')
         .map((s) => s.trim())
@@ -20,6 +44,9 @@ export async function GET(req: NextRequest) {
     );
 
     const supabase = await createClient();
+
+    // Fetch server-side completed video IDs (progress ≥ 90%) in parallel with channel fetch
+    const completedVideoIdsPromise = fetchCompletedVideoIds(supabase);
 
     // 1. Fetch active channels
     const { data: channels, error: chErr } = await supabase
@@ -35,6 +62,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ videos: [], hasMore: false, total: 0, seed, page });
     }
 
+    // Await completed IDs (was kicked off in parallel)
+    const completedVideoIds = await completedVideoIdsPromise;
+    // Merge server-side completed IDs with client-side excludeIds for a unified exclude set
+    const excludeSet = new Set<string>([...clientExcludeSet, ...completedVideoIds]);
+
     // 2. Fetch shorts (is_short = true)
     const channelIds = channels.map((c) => c.id);
     const { data: rawVideos, error: vidErr } = await supabase
@@ -48,14 +80,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: vidErr.message }, { status: 500 });
     }
 
-    // 3. Separate unwatched vs watched shorts if excludeSet is provided
+    // 3. Separate unwatched vs watched shorts
+    //    - "completed" (≥90%): NEVER shown (hard exclude)
+    //    - "seen but <90%" (in clientExcludeSet only): recycled after unwatched exhausted
     let candidateVideos = rawVideos || [];
-    if (excludeSet.size > 0 && candidateVideos.length > 0) {
+
+    // Hard-exclude server-side completed videos
+    if (completedVideoIds.length > 0) {
+      const completedSet = new Set<string>(completedVideoIds);
+      candidateVideos = candidateVideos.filter(
+        (v) => !completedSet.has(v.id) && !completedSet.has(v.youtube_video_id)
+      );
+    }
+
+    // Apply legacy client-side exclude (session-dedup, not permanent)
+    if (clientExcludeSet.size > 0 && candidateVideos.length > 0) {
       const unwatched = candidateVideos.filter(
-        (v) => !excludeSet.has(v.id) && !excludeSet.has(v.youtube_video_id)
+        (v) => !clientExcludeSet.has(v.id) && !clientExcludeSet.has(v.youtube_video_id)
       );
       const watched = candidateVideos.filter(
-        (v) => excludeSet.has(v.id) || excludeSet.has(v.youtube_video_id)
+        (v) => clientExcludeSet.has(v.id) || clientExcludeSet.has(v.youtube_video_id)
       );
 
       // If we have enough unwatched shorts, prioritize them exclusively
@@ -106,3 +150,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Failed to fetch shorts feed' }, { status: 500 });
   }
 }
+

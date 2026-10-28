@@ -1,11 +1,35 @@
 // src/app/api/channels/[channelId]/videos/route.ts
 // Pure keyset cursor pagination (no offset fallback).
 // Also returns channel.sync_status, synced_video_count, total_video_count for UI messaging.
+// Excludes videos the logged-in child has already watched ≥90%.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { Video } from '@/types/content';
 import { formatDuration } from '@/lib/formatters';
+
+/**
+ * Fetch video IDs the child has watched ≥90% of.
+ * Returns an empty array for unauthenticated sessions or non-child roles.
+ */
+async function fetchCompletedVideoIds(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const role = user.user_metadata?.role ?? (user as any).role;
+    if (role !== 'child') return [];
+
+    const { data, error } = await supabase.rpc('get_child_completed_video_ids', {
+      p_child_id: user.id,
+    });
+
+    if (error || !data) return [];
+    return (data as string[]) ?? [];
+  } catch {
+    return [];
+  }
+}
 
 export async function GET(
   req: NextRequest,
@@ -20,12 +44,11 @@ export async function GET(
 
     const supabase = await createClient();
 
-    // 1. Fetch channel details (includes new sync_status columns)
-    const { data: channel, error: chErr } = await supabase
-      .from('channels')
-      .select('*')
-      .eq('id', channelId)
-      .single();
+    // Kick off completed-video fetch and channel fetch in parallel
+    const [completedVideoIds, { data: channel, error: chErr }] = await Promise.all([
+      fetchCompletedVideoIds(supabase),
+      supabase.from('channels').select('*').eq('id', channelId).single(),
+    ]);
 
     if (chErr || !channel) {
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
@@ -43,6 +66,11 @@ export async function GET(
       .order('published_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(pageSize + 1); // fetch 1 extra to determine hasMore cleanly
+
+    // Exclude videos the child has already watched ≥90%
+    if (completedVideoIds.length > 0) {
+      query = query.not('id', 'in', `(${completedVideoIds.join(',')})`);
+    }
 
     if (cursorPub && cursorId) {
       // Keyset condition: items strictly older than the last-seen item
@@ -100,3 +128,4 @@ export async function GET(
     );
   }
 }
+
