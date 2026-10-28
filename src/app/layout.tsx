@@ -35,11 +35,6 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // theme-color drives the browser chrome / Android status bar & navigation bar color
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#FFFFFF' },
-    { media: '(prefers-color-scheme: dark)',  color: '#0F0F0F' },
-  ],
 };
 
 export default function RootLayout({
@@ -50,6 +45,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Canonical mobile status bar theme-color (updated dynamically by useTheme & inline script) */}
+        <meta name="theme-color" content="#0F0F0F" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
         {/* Prevent FOWT: apply stored theme and sync theme-color before first paint */}
         <script
           dangerouslySetInnerHTML={{
@@ -67,9 +66,21 @@ export default function RootLayout({
                   }
                   var color = isDark ? '#0F0F0F' : '#FFFFFF';
                   var metas = document.querySelectorAll('meta[name="theme-color"]');
-                  metas.forEach(function(m) {
+                  if (metas.length > 0) {
+                    metas.forEach(function(m) {
+                      m.removeAttribute('media');
+                      m.setAttribute('content', color);
+                    });
+                  } else {
+                    var m = document.createElement('meta');
+                    m.setAttribute('name', 'theme-color');
                     m.setAttribute('content', color);
-                  });
+                    document.head.appendChild(m);
+                  }
+                  var apple = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+                  if (apple) {
+                    apple.setAttribute('content', isDark ? 'black-translucent' : 'default');
+                  }
                 } catch(e) {}
               })();
             `,

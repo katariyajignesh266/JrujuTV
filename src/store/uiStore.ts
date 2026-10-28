@@ -33,6 +33,10 @@ interface UIState {
   authModalOpen: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;
+
+  // Video player fullscreen state (affects status bar theme-color)
+  isPlayerFullscreen: boolean;
+  setPlayerFullscreen: (fullscreen: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -68,6 +72,10 @@ export const useUIStore = create<UIState>()(
       authModalOpen: false,
       openAuthModal: () => set({ authModalOpen: true }),
       closeAuthModal: () => set({ authModalOpen: false }),
+
+      // Video player fullscreen state
+      isPlayerFullscreen: false,
+      setPlayerFullscreen: (isPlayerFullscreen) => set({ isPlayerFullscreen }),
     }),
     {
       name: 'jruju-ui',

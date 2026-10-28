@@ -11,6 +11,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useUIStore } from '@/store/uiStore';
+import { syncThemeColorMeta } from '@/hooks/useTheme';
 
 declare global {
   interface Window {
@@ -333,8 +335,12 @@ export function YouTubePlayer({
     }
     setIsFullscreen(false);
     setUseRotationFallback(false);
+    useUIStore.getState().setPlayerFullscreen(false);
+    syncThemeColorMeta();
     if (typeof document !== 'undefined') {
       document.body.style.overflow = '';
+      document.documentElement.style.backgroundColor = '';
+      document.body.style.backgroundColor = '';
     }
   }, []);
 
@@ -477,11 +483,45 @@ export function YouTubePlayer({
     };
   }, [toggleFullscreen, exitFullscreen, isFullscreen]);
 
-  // Clean up body scroll lock and orientation lock on unmount
+  // ── Status Bar & Fullscreen Synchronization ──
+  // Rule: When video player is in fullscreen, status bar background MUST ALWAYS BE BLACK (#000000),
+  // regardless of whether the site is in light mode or dark mode!
+  // When exiting fullscreen, it must restore to the active theme (#0F0F0F if dark, #FFFFFF if light).
+  useEffect(() => {
+    useUIStore.getState().setPlayerFullscreen(isFullscreen);
+    syncThemeColorMeta(isFullscreen ? '#000000' : undefined);
+
+    if (isFullscreen) {
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.backgroundColor = '#000000';
+        document.body.style.backgroundColor = '#000000';
+      }
+    } else {
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.backgroundColor = '';
+        document.body.style.backgroundColor = '';
+      }
+    }
+
+    return () => {
+      useUIStore.getState().setPlayerFullscreen(false);
+      syncThemeColorMeta();
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.backgroundColor = '';
+        document.body.style.backgroundColor = '';
+      }
+    };
+  }, [isFullscreen]);
+
+  // Clean up body scroll lock, fullscreen status, and orientation lock on unmount
   useEffect(() => {
     return () => {
+      useUIStore.getState().setPlayerFullscreen(false);
+      syncThemeColorMeta();
       if (typeof document !== 'undefined') {
         document.body.style.overflow = '';
+        document.documentElement.style.backgroundColor = '';
+        document.body.style.backgroundColor = '';
       }
       try {
         (screen.orientation as any)?.unlock?.();
