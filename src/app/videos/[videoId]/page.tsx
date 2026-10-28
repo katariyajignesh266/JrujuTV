@@ -24,6 +24,7 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
   const [moreFromChannel, setMoreFromChannel] = useState<Video[]>([]);
   const [upNext, setUpNext] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
   const [startAt, setStartAt] = useState<number | undefined>(undefined);
 
@@ -32,16 +33,33 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
     async function loadVideoDetails() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/videos/${videoId}`);
+        setNotFound(false);
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        const res = await fetch(`/api/videos/${videoId}`, { headers });
+        if (!res.ok) {
+          if (isMounted) {
+            setNotFound(true);
+          }
+          return;
+        }
         const data = await res.json();
         if (isMounted) {
-          if (data.video) setVideo(data.video);
+          if (data.video) {
+            setVideo(data.video);
+            setNotFound(false);
+          } else {
+            setNotFound(true);
+          }
           if (data.channel) setChannel(data.channel);
           if (data.moreFromChannel) setMoreFromChannel(data.moreFromChannel);
           if (data.upNext) setUpNext(data.upNext);
         }
       } catch (err) {
         console.error('Failed to load video details:', err);
+        if (isMounted) setNotFound(true);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -53,7 +71,7 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
     return () => {
       isMounted = false;
     };
-  }, [videoId]);
+  }, [videoId, session?.access_token]);
 
   // Handle resume position
   useEffect(() => {
@@ -102,7 +120,18 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
     }
   };
 
-  const activeYtId = video?.youtube_video_id || videoId;
+  // Only treat videoId directly as YouTube ID if it is a valid 11-char YouTube ID (e.g. dQw4w9WgXcQ).
+  // If it's a database UUID, we MUST wait for the API response to supply the video's actual youtube_video_id.
+  const isDirectYtId = /^[a-zA-Z0-9_-]{11}$/.test(videoId);
+  const activeYtId = video?.youtube_video_id || (isDirectYtId ? videoId : null);
+
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
 
   return (
     <PageShell>
@@ -111,7 +140,7 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
         <div className="flex items-center justify-between">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={handleBack}
             className="inline-flex items-center gap-1.5 p-2 -ml-2 rounded-2xl text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
           >
             <ArrowLeft size={20} />
@@ -142,8 +171,28 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
               startAt={startAt}
             />
           ) : (
-            <div className="w-full aspect-video bg-surface-secondary animate-pulse flex items-center justify-center">
-              <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
+            <div className="w-full aspect-video bg-surface-secondary flex flex-col items-center justify-center rounded-3xl border border-border overflow-hidden">
+              {notFound ? (
+                <div className="text-center p-6 space-y-3">
+                  <p className="text-content-primary font-semibold text-fluid-base">Video not found or unavailable</p>
+                  <p className="text-fluid-xs text-content-secondary max-w-sm">
+                    This video could not be loaded. It may have been removed or is temporarily unavailable.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-elevated text-xs font-semibold text-content-primary border border-border hover:bg-surface-secondary transition-colors"
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Go Back</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
+                  <span className="text-fluid-xs text-content-secondary">Loading player…</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -199,7 +248,7 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
               </div>
             </div>
           </div>
-        ) : !loading ? (
+        ) : (!loading && !notFound) ? (
           <div className="space-y-4 pt-1">
             <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
               Curated Video Playback

@@ -34,6 +34,7 @@ interface WatchSummary {
 interface HistorySession {
   id: string;
   video_id: string;
+  youtube_video_id?: string;
   channel_id: string;
   watched_seconds: number;
   video_duration_seconds: number;
@@ -255,8 +256,9 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
 
   // ── Navigate to video (resumes from saved position via URL param) ─────────
   const handleHistoryItemClick = (session: HistorySession) => {
-    // Pass resume position as a query param; the video page reads it
-    router.push(`/videos/${session.video_id}?resume=${Math.floor(session.absolute_position)}`);
+    // Prefer direct YouTube ID if available from API/RPC, fallback to video UUID
+    const videoTarget = session.youtube_video_id || session.video_id;
+    router.push(`/videos/${videoTarget}?resume=${Math.floor(session.absolute_position)}`);
   };
 
   const displayedChannels = showAllChannels

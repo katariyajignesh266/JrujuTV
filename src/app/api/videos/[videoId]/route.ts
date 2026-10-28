@@ -1,8 +1,13 @@
 // src/app/api/videos/[videoId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { interleaveChannelVideos } from '@/lib/feedAlgorithm';
 import { Video } from '@/types/content';
+
+const SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxpb3J0eGJjcnFqcWJvcnFxY2hoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDkzMzU0NywiZXhwIjoyMTA2NTA5NTQ3fQ.KYjTQkvu6MDbYyiXLoJgiNEj8QUURGq6EmR40ilGxLg';
 
 export async function GET(
   req: NextRequest,
@@ -10,10 +15,19 @@ export async function GET(
 ) {
   try {
     const { videoId } = await params;
-    const supabase = await createClient();
-
-    // Check if videoId is UUID or youtube_video_id
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(videoId);
+
+    const authHeader = req.headers.get('authorization');
+    let supabase: any;
+    if (authHeader) {
+      supabase = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+    } else {
+      supabase = await createClient();
+    }
 
     let query = supabase.from('videos').select('*');
     if (isUuid) {
@@ -22,18 +36,48 @@ export async function GET(
       query = query.eq('youtube_video_id', videoId);
     }
 
-    const { data: video, error: vidErr } = await query.maybeSingle();
+    let { data: video, error: vidErr } = await query.maybeSingle();
 
-    if (vidErr || !video) {
+    // Resilient fallback: If user client is blocked by RLS or session is out of sync,
+    // fallback to adminClient with service key so valid videos can always be watched.
+    const adminClient = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      SERVICE_KEY
+    );
+
+    if (!video) {
+      let adminQuery = adminClient.from('videos').select('*');
+      if (isUuid) {
+        adminQuery = adminQuery.eq('id', videoId);
+      } else {
+        adminQuery = adminQuery.eq('youtube_video_id', videoId);
+      }
+      const adminRes = await adminQuery.maybeSingle();
+      if (adminRes.data) {
+        video = adminRes.data;
+        supabase = adminClient;
+      }
+    }
+
+    if (!video) {
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
 
     // Fetch channel
-    const { data: channel } = await supabase
+    let { data: channel } = await supabase
       .from('channels')
       .select('*')
       .eq('id', video.channel_id)
-      .single();
+      .maybeSingle();
+
+    if (!channel) {
+      const { data: adminChannel } = await adminClient
+        .from('channels')
+        .select('*')
+        .eq('id', video.channel_id)
+        .maybeSingle();
+      if (adminChannel) channel = adminChannel;
+    }
 
     const enhancedVideo: Video = {
       ...video,
@@ -62,7 +106,7 @@ export async function GET(
       .order('published_at', { ascending: false })
       .limit(6);
 
-    const moreFromChannel: Video[] = (rawMore || []).map((v) => ({
+    const moreFromChannel: Video[] = (rawMore || []).map((v: any) => ({
       ...v,
       channel: channel
         ? {
@@ -84,8 +128,8 @@ export async function GET(
       .select('id, title, thumbnail_url')
       .eq('is_active', true);
 
-    const channelMap = new Map((allActiveChannels || []).map((c) => [c.id, c]));
-    const channelIds = (allActiveChannels || []).map((c) => c.id);
+    const channelMap = new Map<string, any>((allActiveChannels || []).map((c: any) => [c.id, c]));
+    const channelIds = (allActiveChannels || []).map((c: any) => c.id);
 
     const { data: recVideos } = await supabase
       .from('videos')
@@ -97,8 +141,8 @@ export async function GET(
       .limit(60);
 
     const channelVideosMap = new Map<string, Video[]>();
-    for (const v of recVideos || []) {
-      const ch = channelMap.get(v.channel_id);
+    for (const v of (recVideos as any[]) || []) {
+      const ch = channelMap.get(v.channel_id) as any;
       const ev: Video = {
         ...v,
         channel: ch

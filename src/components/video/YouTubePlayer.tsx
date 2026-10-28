@@ -87,6 +87,7 @@ export function YouTubePlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isApiReady, setIsApiReady] = useState(false);
+  const [playerError, setPlayerError] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekPreview, setSeekPreview] = useState(0);
   /* Item 6: Track whether we need the CSS rotation fallback (iOS Safari, etc.) */
@@ -205,7 +206,15 @@ export function YouTubePlayer({
   useEffect(() => {
     if (!isApiReady || !videoId) return;
 
+    // Validate YouTube Video ID (must be a valid 11-char string, e.g. dQw4w9WgXcQ)
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+      console.warn(`[YouTubePlayer] Invalid YouTube video ID passed: "${videoId}". Aborting player initialization.`);
+      setIsBuffering(false);
+      return;
+    }
+
     let isMounted = true;
+    setPlayerError(false);
     const playerElementId = `yt-player-${videoId}`;
 
     // Clean up previous player
@@ -218,69 +227,79 @@ export function YouTubePlayer({
       playerRef.current = null;
     }
 
-    const player = new window.YT.Player(playerElementId, {
-      videoId,
-      playerVars: {
-        autoplay: autoplay ? 1 : 0,
-        controls: 0, // Hides native YouTube controls, removing "Watch on YouTube"
-        modestbranding: 1,
-        rel: 0,
-        iv_load_policy: 3,
-        fs: 1,
-        disablekb: 1,
-        enablejsapi: 1,
-        playsinline: 1,
-        origin: typeof window !== 'undefined' ? window.location.origin : '',
-        ...(startAt && startAt > 0 ? { start: Math.floor(startAt) } : {}),
-      },
-      events: {
-        onReady: (event: any) => {
-          if (!isMounted) return;
-          playerRef.current = event.target;
-          const dur = event.target.getDuration();
-          if (dur) setDuration(dur);
-          if (startAt && startAt > 0) {
-            try {
-              event.target.seekTo(startAt, true);
-            } catch {
-              // ignore
+    try {
+      const player = new window.YT.Player(playerElementId, {
+        videoId,
+        playerVars: {
+          autoplay: autoplay ? 1 : 0,
+          controls: 0, // Hides native YouTube controls, removing "Watch on YouTube"
+          modestbranding: 1,
+          rel: 0,
+          iv_load_policy: 3,
+          fs: 1,
+          disablekb: 1,
+          enablejsapi: 1,
+          playsinline: 1,
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
+          ...(startAt && startAt > 0 ? { start: Math.floor(startAt) } : {}),
+        },
+        events: {
+          onReady: (event: any) => {
+            if (!isMounted) return;
+            playerRef.current = event.target;
+            const dur = event.target.getDuration();
+            if (dur) setDuration(dur);
+            if (startAt && startAt > 0) {
+              try {
+                event.target.seekTo(startAt, true);
+              } catch {
+                // ignore
+              }
             }
-          }
-          setIsBuffering(false);
-          if (autoplay) {
-            event.target.playVideo();
-          }
-        },
-        onStateChange: (event: any) => {
-          if (!isMounted) return;
-          // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
-          if (event.data === 1) {
-            setIsPlaying(true);
             setIsBuffering(false);
-            scheduleHideControls();
-          } else if (event.data === 2) {
-            setIsPlaying(false);
+            if (autoplay) {
+              event.target.playVideo();
+            }
+          },
+          onStateChange: (event: any) => {
+            if (!isMounted) return;
+            // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+            if (event.data === 1) {
+              setIsPlaying(true);
+              setIsBuffering(false);
+              scheduleHideControls();
+            } else if (event.data === 2) {
+              setIsPlaying(false);
+              setIsBuffering(false);
+              setShowControls(true);
+              flushHeartbeat();
+            } else if (event.data === 3) {
+              setIsBuffering(true);
+            } else if (event.data === 0) {
+              setIsPlaying(false);
+              setIsBuffering(false);
+              setShowControls(true);
+              flushHeartbeat();
+              if (onEnded) onEnded();
+            }
+          },
+          onError: (event: any) => {
+            if (!isMounted) return;
+            console.warn('[YouTubePlayer] YT.Player error event:', event?.data);
             setIsBuffering(false);
-            setShowControls(true);
-            flushHeartbeat();
-          } else if (event.data === 3) {
-            setIsBuffering(true);
-          } else if (event.data === 0) {
-            setIsPlaying(false);
-            setIsBuffering(false);
-            setShowControls(true);
-            flushHeartbeat();
-            if (onEnded) onEnded();
-          }
+            setPlayerError(true);
+          },
         },
-        onError: () => {
-          if (!isMounted) return;
-          setIsBuffering(false);
-        },
-      },
-    });
+      });
 
-    playerRef.current = player;
+      playerRef.current = player;
+    } catch (err) {
+      console.error('[YouTubePlayer] Exception initializing YT.Player:', err);
+      if (isMounted) {
+        setIsBuffering(false);
+        setPlayerError(true);
+      }
+    }
 
     return () => {
       isMounted = false;
@@ -714,9 +733,19 @@ export function YouTubePlayer({
       )}
 
       {/* ── 3. Buffering / Loading Spinner ── */}
-      {isBuffering && (
+      {isBuffering && !playerError && (
         <div className="absolute inset-0 z-15 pointer-events-none flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
           <Loader2 className="h-12 w-12 text-brand-primary animate-spin" />
+        </div>
+      )}
+
+      {/* ── 3b. Player Error Overlay ── */}
+      {playerError && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 text-white p-6 text-center space-y-2">
+          <p className="font-semibold text-fluid-base">Video Playback Unavailable</p>
+          <p className="text-fluid-xs text-white/70 max-w-sm">
+            This video cannot be played directly or is restricted by YouTube.
+          </p>
         </div>
       )}
 
