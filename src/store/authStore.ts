@@ -44,10 +44,20 @@ function extractUser(session: Session | null): User | null {
   const role = extractRole(session);
 
   if (role === 'child') {
+    let username = user.user_metadata?.username;
+    if (!username && user.email) {
+      if (user.email.endsWith('@child.jrujutv.internal')) {
+        username = user.email.replace(/@child\.jrujutv\.internal$/i, '');
+      } else {
+        username = user.email.split('@')[0];
+      }
+    }
+
     return {
       id: user.id,
-      name: user.user_metadata?.display_name || 'Child',
-      username: user.user_metadata?.username,
+      name: user.user_metadata?.display_name || user.user_metadata?.name || 'Child',
+      email: user.email,
+      username: username || undefined,
       role: 'child',
       parentId: user.app_metadata?.parent_id,
     };
@@ -262,12 +272,40 @@ export const useAuthStore = create<AuthState>()((set, get) => {
 
         if (error) throw error;
 
+        const cleanUsername = username.trim().toLowerCase();
+        const extractedUser = extractUser(data.session);
+        if (extractedUser && !extractedUser.username) {
+          extractedUser.username = cleanUsername;
+        }
+
         set({
           session: data.session,
           role: extractRole(data.session),
-          user: extractUser(data.session),
+          user: extractedUser,
           loading: false,
         });
+
+        // Also fetch from children table to get full display_name and confirmed username
+        if (data.session?.user?.id) {
+          supabase
+            .from('children')
+            .select('username, display_name')
+            .eq('id', data.session.user.id)
+            .maybeSingle()
+            .then(({ data: childData }) => {
+              if (childData) {
+                set((state) => ({
+                  user: state.user
+                    ? {
+                        ...state.user,
+                        username: childData.username || state.user.username,
+                        name: childData.display_name || state.user.name,
+                      }
+                    : state.user,
+                }));
+              }
+            });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Invalid username or password';
         set({ loading: false, error: message });
@@ -351,6 +389,25 @@ export const useAuthStore = create<AuthState>()((set, get) => {
                 email: session.user.email!,
               }, { onConflict: 'id' }).then(() => {});
             }
+          } else if (role === 'child') {
+            supabase
+              .from('children')
+              .select('username, display_name')
+              .eq('id', session.user.id)
+              .maybeSingle()
+              .then(({ data: childData }) => {
+                if (childData) {
+                  set((state) => ({
+                    user: state.user
+                      ? {
+                          ...state.user,
+                          username: childData.username || state.user.username,
+                          name: childData.display_name || state.user.name,
+                        }
+                      : state.user,
+                  }));
+                }
+              });
           }
         }
         set({
@@ -377,6 +434,27 @@ export const useAuthStore = create<AuthState>()((set, get) => {
             initialized: true,
             loading: false,
           });
+
+          if (session && extractRole(session) === 'child') {
+            supabase
+              .from('children')
+              .select('username, display_name')
+              .eq('id', session.user.id)
+              .maybeSingle()
+              .then(({ data: childData }) => {
+                if (childData) {
+                  set((state) => ({
+                    user: state.user
+                      ? {
+                          ...state.user,
+                          username: childData.username || state.user.username,
+                          name: childData.display_name || state.user.name,
+                        }
+                      : state.user,
+                  }));
+                }
+              });
+          }
         }
       );
 

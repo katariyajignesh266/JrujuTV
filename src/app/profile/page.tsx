@@ -79,6 +79,39 @@ export default function ProfilePage() {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
+  // Child profile info (for child account self-view)
+  const [childInfo, setChildInfo] = useState<{ username?: string; display_name?: string } | null>(null);
+
+  useEffect(() => {
+    if (role === 'child' && user?.id) {
+      const supabase = createClient();
+      supabase
+        .from('children')
+        .select('username, display_name')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setChildInfo(data);
+          }
+        });
+    }
+  }, [role, user?.id]);
+
+  const resolvedChildUsername =
+    childInfo?.username ||
+    user?.username ||
+    (user?.email && user.email.includes('@')
+      ? user.email.replace(/@child\.jrujutv\.internal$/i, '').split('@')[0]
+      : '') ||
+    '';
+
+  const resolvedChildDisplayName =
+    childInfo?.display_name ||
+    (user?.name && user.name !== 'Child' ? user.name : '') ||
+    resolvedChildUsername ||
+    'Child';
+
   // ── Fetch children for parent ─────────────────────────────────────────────
   const fetchChildren = useCallback(async () => {
     if (role !== 'parent' || !session) return;
@@ -312,11 +345,11 @@ export default function ProfilePage() {
             style={{ background: role === 'parent' ? 'var(--color-brand-primary)' : 'var(--color-brand-tertiary)' }}
             aria-hidden="true"
           >
-            {user?.name?.charAt(0).toUpperCase() || 'U'}
+            {(role === 'child' ? resolvedChildDisplayName : (user?.name || 'U')).charAt(0).toUpperCase()}
           </div>
           <div className="text-center">
             <h1 className="font-display text-fluid-xl font-bold text-content-primary">
-              {user?.name || (role === 'child' ? user?.username : 'Parent')}
+              {role === 'child' ? resolvedChildDisplayName : (user?.name || 'Parent')}
             </h1>
             <span
               className={cn(
@@ -369,11 +402,8 @@ export default function ProfilePage() {
               <div className="p-4 space-y-2 text-fluid-sm">
                 <div className="flex justify-between items-center text-content-secondary">
                   <span>Username:</span>
-                  {/* BUG FIX: user_metadata.username is now correctly written by create-child-account.
-                      Falls back to children.username via the display_name field if still missing
-                      on very old accounts. */}
                   <span className="font-semibold text-content-primary">
-                    @{user?.username ?? '…'}
+                    @{resolvedChildUsername || '…'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-content-secondary">
@@ -770,7 +800,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex-1">
                   <p className="font-bold text-content-primary text-fluid-base">Your Progress</p>
-                  <p className="text-[11px] text-content-secondary">@{user?.username ?? '…'}</p>
+                  <p className="text-[11px] text-content-secondary">@{resolvedChildUsername || '…'}</p>
                 </div>
                 <button
                   type="button"
