@@ -362,7 +362,7 @@ export default function ProfilePage() {
     <PageShell>
       <div className="max-w-lg mx-auto pb-14 space-y-5">
         {/* Avatar + Name + Summary Dashboard */}
-        <div className="relative rounded-3xl bg-surface-secondary/70 backdrop-blur-xl border border-border/80 p-6 flex flex-col items-center text-center shadow-sm overflow-hidden">
+        <div className="relative rounded-3xl bg-white/80 dark:bg-[#12121e]/85 backdrop-blur-2xl border border-neutral-200/80 dark:border-white/[0.06] p-6 flex flex-col items-center text-center shadow-sm dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.03)] overflow-hidden transition-all">
           {/* Decorative ambient glow */}
           <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-brand-primary/15 via-brand-secondary/5 to-transparent pointer-events-none" />
 
@@ -380,7 +380,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Role indicator floating tag */}
-            <div className="absolute -bottom-1 -right-1 h-7 w-7 rounded-xl bg-surface-elevated border-2 border-surface-secondary flex items-center justify-center shadow-md">
+            <div className="absolute -bottom-1 -right-1 h-7 w-7 rounded-xl bg-white dark:bg-[#1a1a2c] border-2 border-neutral-100 dark:border-[#12121e] flex items-center justify-center shadow-md">
               {role === 'parent' ? (
                 <Shield size={14} className="text-brand-primary fill-brand-primary/20" />
               ) : (
@@ -390,7 +390,7 @@ export default function ProfilePage() {
           </div>
 
           {/* User Name */}
-          <h1 className="font-display text-fluid-xl font-bold text-content-primary tracking-tight">
+          <h1 className="font-display text-fluid-xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
             {role === 'child' ? resolvedChildDisplayName : (user?.name || 'Parent')}
           </h1>
 
@@ -411,19 +411,19 @@ export default function ProfilePage() {
 
           {/* Parent Summary Stats Row */}
           {role === 'parent' && (
-            <div className="grid grid-cols-3 gap-2 w-full mt-6 pt-5 border-t border-border/60">
+            <div className="grid grid-cols-3 gap-2.5 w-full mt-6 pt-5 border-t border-neutral-200/70 dark:border-white/[0.06]">
               <button
                 type="button"
                 onClick={() => {
                   setShowManageChildren(true);
                   setShowAddChild(false);
                 }}
-                className="p-3 rounded-2xl bg-surface-elevated/70 border border-border/60 hover:border-brand-primary/30 active:scale-95 transition-all flex flex-col items-center"
+                className="p-3 rounded-2xl bg-neutral-100/70 dark:bg-white/[0.03] border border-neutral-200/80 dark:border-white/[0.06] hover:border-red-400/40 dark:hover:border-red-500/30 hover:bg-white dark:hover:bg-white/[0.06] active:scale-95 transition-all flex flex-col items-center shadow-xs"
               >
-                <span className="text-fluid-lg font-extrabold text-content-primary">
+                <span className="text-fluid-lg font-extrabold text-neutral-900 dark:text-white">
                   {loadingChildren ? '…' : childrenList.length}
                 </span>
-                <span className="text-[11px] font-medium text-content-secondary mt-0.5">
+                <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">
                   Children
                 </span>
               </button>
@@ -431,21 +431,21 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => router.push('/settings/manage-channels')}
-                className="p-3 rounded-2xl bg-surface-elevated/70 border border-border/60 hover:border-brand-primary/30 active:scale-95 transition-all flex flex-col items-center"
+                className="p-3 rounded-2xl bg-neutral-100/70 dark:bg-white/[0.03] border border-neutral-200/80 dark:border-white/[0.06] hover:border-red-400/40 dark:hover:border-red-500/30 hover:bg-white dark:hover:bg-white/[0.06] active:scale-95 transition-all flex flex-col items-center shadow-xs"
               >
-                <span className="text-fluid-lg font-extrabold text-content-primary">
+                <span className="text-fluid-lg font-extrabold text-neutral-900 dark:text-white">
                   {channelsCount !== null ? channelsCount : '…'}
                 </span>
-                <span className="text-[11px] font-medium text-content-secondary mt-0.5">
+                <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">
                   Channels
                 </span>
               </button>
 
-              <div className="p-3 rounded-2xl bg-surface-elevated/70 border border-border/60 flex flex-col items-center">
-                <span className="text-fluid-lg font-extrabold text-content-primary">
+              <div className="p-3 rounded-2xl bg-neutral-100/70 dark:bg-white/[0.03] border border-neutral-200/80 dark:border-white/[0.06] flex flex-col items-center shadow-xs">
+                <span className="text-fluid-lg font-extrabold text-neutral-900 dark:text-white">
                   {loadingToday ? '…' : formatWatchDuration(Object.values(todayMap).reduce((a, b) => a + b, 0))}
                 </span>
-                <span className="text-[11px] font-medium text-content-secondary mt-0.5">
+                <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">
                   Today Watch
                 </span>
               </div>
@@ -494,15 +494,15 @@ export default function ProfilePage() {
           {role === 'child' && (
             <ProfileSection title="Your Account">
               <div className="p-4 space-y-2 text-fluid-sm">
-                <div className="flex justify-between items-center text-content-secondary">
+                <div className="flex justify-between items-center text-neutral-500 dark:text-neutral-400">
                   <span>Username:</span>
-                  <span className="font-semibold text-content-primary">
+                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">
                     @{resolvedChildUsername || '…'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-content-secondary">
+                <div className="flex justify-between items-center text-neutral-500 dark:text-neutral-400">
                   <span>Safe Mode:</span>
-                  <span className="text-emerald-500 font-medium flex items-center gap-1">
+                  <span className="text-emerald-500 dark:text-emerald-400 font-medium flex items-center gap-1">
                     <CheckCircle2 size={14} /> Active
                   </span>
                 </div>
@@ -1093,20 +1093,20 @@ export default function ProfilePage() {
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl bg-surface-secondary/75 backdrop-blur-xl border border-border/80 overflow-hidden shadow-xs">
+    <div className="rounded-3xl overflow-hidden backdrop-blur-2xl transition-all bg-white/80 dark:bg-[#12121e]/85 border border-neutral-200/80 dark:border-white/[0.06] shadow-sm dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
       {title && (
-        <p className="px-5 pt-4 pb-1 text-[11px] font-bold text-content-disabled uppercase tracking-wider">
+        <p className="px-5 pt-4 pb-1 text-[11px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
           {title}
         </p>
       )}
-      <div className="divide-y divide-border/60">{children}</div>
+      <div className="divide-y divide-neutral-200/70 dark:divide-white/[0.05]">{children}</div>
     </div>
   );
 }
 
 function ProfileItem({
   icon: Icon,
-  iconBg = 'bg-surface-elevated text-content-secondary',
+  iconBg = 'bg-neutral-100 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-300',
   label,
   subtitle,
   badge,
@@ -1130,14 +1130,16 @@ function ProfileItem({
         'text-left transition-all duration-150',
         'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary group',
         danger
-          ? 'text-red-500 hover:bg-red-500/10'
-          : 'text-content-primary hover:bg-surface-elevated/70'
+          ? 'text-red-500 dark:text-red-400 hover:bg-red-500/10'
+          : 'text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100/60 dark:hover:bg-white/[0.04]'
       )}
     >
       <div
         className={cn(
-          'h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 border border-border/60 shadow-xs transition-transform duration-200 group-hover:scale-105',
-          danger ? 'bg-red-500/10 text-red-500 border-red-500/20' : iconBg
+          'h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs transition-transform duration-200 group-hover:scale-105',
+          danger
+            ? 'bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20'
+            : cn(iconBg, 'border-neutral-200/70 dark:border-white/[0.06]')
         )}
       >
         <Icon size={19} strokeWidth={1.85} aria-hidden="true" />
@@ -1146,19 +1148,19 @@ function ProfileItem({
       <div className="flex-1 min-w-0">
         <p className="text-fluid-sm font-semibold truncate leading-snug">{label}</p>
         {subtitle && (
-          <p className="text-[11.5px] text-content-secondary truncate mt-0.5">{subtitle}</p>
+          <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">{subtitle}</p>
         )}
       </div>
 
       {badge && (
-        <span className="text-[11px] font-bold text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-2.5 py-0.5 rounded-full shadow-xs">
+        <span className="text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full shadow-xs">
           {badge}
         </span>
       )}
       {!badge && !danger && (
         <ChevronRight
           size={17}
-          className="text-content-disabled group-hover:text-content-primary group-hover:translate-x-0.5 transition-all shrink-0"
+          className="text-neutral-400 dark:text-neutral-600 group-hover:text-neutral-700 dark:group-hover:text-neutral-300 group-hover:translate-x-0.5 transition-all shrink-0"
           aria-hidden="true"
         />
       )}

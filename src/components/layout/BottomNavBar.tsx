@@ -19,12 +19,12 @@ export function BottomNavBar() {
         'md:hidden', // Visible only on mobile (<768px), strictly hidden on tablet and desktop
         'fixed bottom-0 left-0 right-0 z-50 w-full max-w-full overflow-hidden',
         /* Premium glass base */
-        'bg-white/80 dark:bg-[#080810]/88 backdrop-blur-2xl',
+        'bg-white/95 dark:bg-[#090910]/95 backdrop-blur-2xl',
         /* Top border + shimmer */
-        'border-t border-neutral-200/70 dark:border-white/[0.06]',
+        'border-t border-neutral-200/80 dark:border-white/[0.08]',
         /* Rich multi-layer shadow upward */
-        'shadow-[0_-4px_32px_rgba(0,0,0,0.08),0_-1px_0_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_40px_rgba(0,0,0,0.55),0_-1px_0_rgba(255,255,255,0.03)]',
-        'transition-theme',
+        'shadow-[0_-4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_30px_rgba(0,0,0,0.6)]',
+        'transition-colors duration-200',
         // Safe area for iOS home indicator
         'pb-[env(safe-area-inset-bottom)]'
       )}
@@ -69,7 +69,7 @@ export function BottomNavBar() {
                   'active:scale-90',
                   isActive
                     ? 'text-red-500 dark:text-red-400'
-                    : 'text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300'
+                    : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
                 )}
               >
                 <div className="relative flex items-center justify-center">
@@ -83,7 +83,7 @@ export function BottomNavBar() {
                       className={cn(
                         'relative h-6 w-6 rounded-full flex items-center justify-center text-white text-[10.5px] font-bold z-10',
                         'shadow-md',
-                        isActive && 'ring-2 ring-red-500 ring-offset-1 dark:ring-offset-[#080810]'
+                        isActive && 'ring-2 ring-red-500 ring-offset-1 dark:ring-offset-[#090910]'
                       )}
                       style={{
                         background: role === 'parent'

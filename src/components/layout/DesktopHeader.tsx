@@ -19,7 +19,7 @@ export function DesktopHeader() {
       className={cn(
         'sticky top-0 z-50 h-14',
         /* Premium glass */
-        'bg-white/80 dark:bg-[#080810]/88 backdrop-blur-2xl',
+        'bg-white/85 dark:bg-[#090910]/95 backdrop-blur-2xl',
         /* Refined border */
         'border-b border-neutral-200/60 dark:border-white/[0.05]',
         /* Layered shadow */
