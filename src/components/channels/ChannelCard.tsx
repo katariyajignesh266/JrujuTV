@@ -66,99 +66,112 @@ export function ChannelCard({
   return (
     <div
       className={cn(
-        'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-3xl bg-surface-secondary border border-border',
-        'transition-all duration-200',
-        isHidden && 'opacity-60 bg-surface-secondary/50'
+        'w-full max-w-full overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-3xl',
+        'bg-surface-secondary/70 backdrop-blur-md border border-border/80 shadow-sm',
+        'hover:border-brand-primary/30 hover:shadow-md transition-all duration-200 group',
+        isHidden && 'opacity-65 bg-surface-secondary/40 border-dashed'
       )}
     >
-      <div className="flex items-center gap-3.5 min-w-0">
-        <div className="relative h-14 w-14 rounded-full overflow-hidden bg-surface-elevated border border-border shrink-0">
+      <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto flex-1">
+        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden bg-surface-elevated border border-border/80 shrink-0 shadow-sm group-hover:scale-105 transition-transform">
           {channel.thumbnail_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={channel.thumbnail_url} alt={channel.title} className="h-full w-full object-cover" />
           ) : (
-            <div className="h-full w-full flex items-center justify-center font-bold text-lg text-brand-primary">
+            <div className="h-full w-full flex items-center justify-center font-bold text-lg text-brand-primary bg-brand-primary/10">
               {channel.title.charAt(0)}
             </div>
           )}
         </div>
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-fluid-base text-content-primary truncate">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <h4
+              className="font-bold text-fluid-base text-content-primary truncate max-w-[200px] sm:max-w-[280px]"
+              title={channel.title}
+            >
               {channel.title}
             </h4>
             {isHidden && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-500/10 text-neutral-400 border border-neutral-500/20">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-500/10 text-neutral-400 border border-neutral-500/20">
                 Hidden
               </span>
             )}
             {(channel.sync_status === 'pending' || channel.sync_status === 'in_progress') && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                <Loader2 size={9} className="animate-spin" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 animate-pulse">
+                <Loader2 size={10} className="animate-spin" />
                 Importing
               </span>
             )}
             {channel.sync_status === 'complete' && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 size={9} />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-sm">
+                <CheckCircle2 size={10} className="text-emerald-500" />
                 Synced
               </span>
             )}
           </div>
-          <p className="text-[12px] text-content-secondary">
-            {(channel.synced_video_count ?? channel.video_count) > 0 &&
-              `${(channel.synced_video_count ?? channel.video_count).toLocaleString()} videos · `}
-            Last synced: {formatRelativeTime(channel.last_synced_at)}
+
+          <p className="text-[12px] text-content-secondary flex items-center gap-1.5 flex-wrap">
+            {(channel.synced_video_count ?? channel.video_count) > 0 && (
+              <span className="font-medium text-content-primary">
+                {(channel.synced_video_count ?? channel.video_count).toLocaleString()} videos
+              </span>
+            )}
+            {(channel.synced_video_count ?? channel.video_count) > 0 && <span>·</span>}
+            <span>Last synced: {formatRelativeTime(channel.last_synced_at)}</span>
           </p>
         </div>
       </div>
 
       {/* Admin Action Buttons */}
-      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
-        {/* View Page */}
+      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-border/50 shrink-0">
+        {/* View Channel Page */}
         <Link
           href={`/channels/${channel.id}`}
-          className="p-2 rounded-xl text-content-secondary hover:text-content-primary hover:bg-surface-elevated transition-colors"
+          className="h-9 w-9 rounded-xl flex items-center justify-center text-content-secondary hover:text-content-primary bg-surface-elevated border border-border/60 hover:border-brand-primary/40 active:scale-95 transition-all shadow-xs"
           title="View channel page"
+          aria-label="View channel page"
         >
-          <ExternalLink size={18} />
+          <ExternalLink size={16} />
         </Link>
 
-        {/* Hide / Unhide */}
+        {/* Hide / Unhide Toggle */}
         <button
           type="button"
           onClick={() => onToggleActive?.(channel)}
           className={cn(
-            'p-2 rounded-xl transition-colors',
+            'h-9 w-9 rounded-xl flex items-center justify-center active:scale-95 transition-all border shadow-xs',
             isHidden
-              ? 'text-amber-500 hover:bg-amber-500/10'
-              : 'text-content-secondary hover:text-content-primary hover:bg-surface-elevated'
+              ? 'text-amber-500 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20'
+              : 'text-content-secondary hover:text-content-primary bg-surface-elevated border-border/60 hover:border-brand-primary/40'
           )}
           title={isHidden ? 'Show channel to children' : 'Hide channel from feeds'}
+          aria-label={isHidden ? 'Show channel to children' : 'Hide channel from feeds'}
         >
-          {isHidden ? <EyeOff size={18} /> : <Eye size={18} />}
+          {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
 
-        {/* Manual Refresh / Sync */}
+        {/* Manual Sync / Refresh */}
         <button
           type="button"
           onClick={() => onSync?.(channel)}
           disabled={isSyncing}
-          className="p-2 rounded-xl text-content-secondary hover:text-brand-primary hover:bg-brand-primary/10 transition-colors disabled:opacity-50"
+          className="h-9 w-9 rounded-xl flex items-center justify-center text-content-secondary hover:text-brand-primary bg-surface-elevated border border-border/60 hover:border-brand-primary/40 active:scale-95 transition-all disabled:opacity-50 shadow-xs"
           title="Refresh videos from YouTube"
+          aria-label="Refresh videos from YouTube"
         >
-          {isSyncing ? <Loader2 size={18} className="animate-spin text-brand-primary" /> : <RefreshCw size={18} />}
+          {isSyncing ? <Loader2 size={16} className="animate-spin text-brand-primary" /> : <RefreshCw size={16} />}
         </button>
 
         {/* Delete */}
         <button
           type="button"
           onClick={() => onDelete?.(channel)}
-          className="p-2 rounded-xl text-red-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+          className="h-9 w-9 rounded-xl flex items-center justify-center text-red-500 hover:text-red-600 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all shadow-xs"
           title="Delete channel and all videos"
+          aria-label="Delete channel"
         >
-          <Trash2 size={18} />
+          <Trash2 size={16} />
         </button>
       </div>
     </div>

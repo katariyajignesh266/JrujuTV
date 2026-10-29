@@ -18,8 +18,8 @@ export function BottomNavBar() {
       aria-label="Mobile navigation"
       className={cn(
         'md:hidden', // Visible only on mobile (<768px), strictly hidden on tablet and desktop
-        'fixed bottom-0 inset-x-0 z-50',
-        'bg-surface-primary border-t border-border',
+        'fixed bottom-0 left-0 right-0 z-50 w-full max-w-full overflow-hidden',
+        'bg-surface-primary/95 backdrop-blur-xl border-t border-border',
         'transition-theme',
         // Safe area for iOS home indicator
         'pb-[env(safe-area-inset-bottom)]'
@@ -27,7 +27,7 @@ export function BottomNavBar() {
     >
       <ul
         role="list"
-        className="flex h-14 items-stretch justify-around px-1"
+        className="grid grid-cols-5 h-14 w-full max-w-full items-stretch px-0.5"
       >
         {MOBILE_BOTTOM_NAV.map((item) => {
           const isProfile = item.id === 'profile';

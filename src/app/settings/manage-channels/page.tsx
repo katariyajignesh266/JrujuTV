@@ -329,87 +329,180 @@ export default function ManageChannelsPage() {
     <PageShell>
       <div className="max-w-3xl mx-auto space-y-6 pb-16">
         {/* Navigation Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           <Link
             href="/settings"
-            className="p-2 -ml-2 rounded-2xl text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+            className="h-10 w-10 rounded-2xl flex items-center justify-center text-content-secondary hover:text-content-primary bg-surface-secondary border border-border/80 hover:bg-surface-elevated transition-colors shadow-xs shrink-0"
+            aria-label="Back to Settings"
           >
             <ArrowLeft size={20} />
           </Link>
-          <div>
-            <h1 className="font-display text-fluid-xl font-bold text-content-primary flex items-center gap-2.5">
-              <Tv2 className="text-brand-primary" size={24} /> Manage YouTube Channels
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-fluid-xl font-bold text-content-primary flex items-center gap-2.5 truncate">
+              <span className="h-8 w-8 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-secondary flex items-center justify-center text-white shadow-sm shrink-0">
+                <Tv2 size={18} />
+              </span>
+              <span className="truncate">Manage YouTube Channels</span>
             </h1>
-            <p className="text-fluid-sm text-content-secondary mt-0.5">
-              Add YouTube channels for your children. All approved videos will be safely cached.
+            <p className="text-fluid-sm text-content-secondary mt-0.5 truncate">
+              Add and curate approved channels for your kids.
             </p>
           </div>
         </div>
 
-        {/* ── 1. Paste Link & Fetch Section ── */}
-        <div className="rounded-3xl bg-surface-secondary border border-border p-5 sm:p-6 space-y-4 shadow-sm">
-          <h2 className="font-semibold text-fluid-base text-content-primary">
-            Add a New Channel
-          </h2>
-          <p className="text-[12px] text-content-secondary leading-relaxed">
-            Paste any YouTube channel link (e.g.{' '}
-            <span className="font-mono text-content-primary">youtube.com/@handle</span> or{' '}
-            <span className="font-mono text-content-primary">youtube.com/channel/UC...</span>).
-          </p>
+        {/* ── 1. Paste Link & Fetch Section (Ultra-Premium Card) ── */}
+        <div className="relative w-full max-w-full overflow-hidden rounded-3xl bg-surface-secondary/80 backdrop-blur-xl border border-border/80 p-5 sm:p-6 space-y-4 shadow-sm">
+          {/* Animated scanning beam while fetching */}
+          {isFetching && (
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer-slide z-10" />
+          )}
 
-          <form onSubmit={handleFetchDetails} className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-secondary pointer-events-none"
-                size={18}
-              />
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => {
-                  setUrlInput(e.target.value);
-                  if (fetchError) setFetchError(null);
-                }}
-                placeholder="https://www.youtube.com/@SuperSimpleSongs"
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-fluid-base text-content-primary flex items-center gap-2">
+                <span>Add a YouTube Channel</span>
+              </h2>
+              <p className="text-[12px] text-content-secondary mt-0.5">
+                Paste any YouTube channel link or @handle to scan and import.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleFetchDetails} className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <div className="relative flex-1 min-w-0">
+                <Search
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-disabled pointer-events-none"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => {
+                    setUrlInput(e.target.value);
+                    if (fetchError) setFetchError(null);
+                  }}
+                  placeholder="Paste URL or @handle (e.g. @SuperSimpleSongs)"
+                  className={cn(
+                    'w-full h-12 pl-10 pr-20 rounded-2xl text-fluid-sm font-medium',
+                    'bg-surface-elevated border border-border/80 text-content-primary placeholder:text-content-disabled',
+                    'focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all shadow-xs'
+                  )}
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {urlInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUrlInput('');
+                        setFetchError(null);
+                        setPreview(null);
+                      }}
+                      className="p-1.5 rounded-lg text-content-disabled hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                      title="Clear"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                  {typeof navigator !== 'undefined' && navigator.clipboard && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) {
+                            setUrlInput(text.trim());
+                            if (fetchError) setFetchError(null);
+                          }
+                        } catch {}
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
+                      title="Paste from clipboard"
+                    >
+                      Paste
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isFetching || !urlInput.trim()}
                 className={cn(
-                  'w-full h-12 pl-10 pr-4 rounded-2xl text-fluid-sm font-medium',
-                  'bg-surface-elevated border border-border text-content-primary',
-                  'focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all'
+                  'h-12 px-6 rounded-2xl font-bold text-fluid-sm text-white shrink-0',
+                  'bg-gradient-to-r from-brand-primary to-brand-secondary shadow-md shadow-brand-primary/20',
+                  'hover:shadow-brand-primary/35 hover:scale-[1.01] active:scale-95 transition-all',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none',
+                  'flex items-center justify-center gap-2'
                 )}
-              />
+              >
+                {isFetching ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Scanning…</span>
+                  </>
+                ) : (
+                  <span>Fetch Details</span>
+                )}
+              </button>
             </div>
 
-            <button
-              type="submit"
-              disabled={isFetching || !urlInput.trim()}
-              className={cn(
-                'h-12 px-6 rounded-2xl font-semibold text-fluid-sm text-white shrink-0',
-                'bg-brand-primary hover:bg-brand-primary/90 active:scale-95 shadow-md shadow-brand-primary/20 transition-all',
-                'disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
-              )}
-            >
-              {isFetching ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Fetching…</span>
-                </>
-              ) : (
-                <span>Fetch Details</span>
-              )}
-            </button>
+            {/* Example helper chips placed clean below the button as requested */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-[11px] text-content-disabled font-medium mr-1">Examples:</span>
+              <button
+                type="button"
+                onClick={() => setUrlInput('https://www.youtube.com/@SuperSimpleSongs')}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-elevated hover:bg-surface-primary border border-border/80 text-content-secondary hover:text-brand-primary transition-colors cursor-pointer"
+              >
+                @SuperSimpleSongs
+              </button>
+              <button
+                type="button"
+                onClick={() => setUrlInput('https://www.youtube.com/@CoComelon')}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-elevated hover:bg-surface-primary border border-border/80 text-content-secondary hover:text-brand-primary transition-colors cursor-pointer"
+              >
+                @CoComelon
+              </button>
+              <button
+                type="button"
+                onClick={() => setUrlInput('https://www.youtube.com/@LIVComedy')}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-elevated hover:bg-surface-primary border border-border/80 text-content-secondary hover:text-brand-primary transition-colors cursor-pointer"
+              >
+                @LIVComedy
+              </button>
+            </div>
           </form>
+
+          {/* Scanning In-Progress Holographic Radar Banner */}
+          {isFetching && (
+            <div className="p-4 rounded-2xl bg-brand-primary/[0.06] border border-brand-primary/20 space-y-2 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-2.5 text-brand-primary">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-primary"></span>
+                </span>
+                <span className="text-xs font-bold tracking-wide uppercase">
+                  Connecting to YouTube &amp; Scanning Channel…
+                </span>
+              </div>
+              <p className="text-[11.5px] text-content-secondary leading-relaxed pl-5">
+                Fetching channel title, verified status, subscriber count, and verified playlist videos.
+              </p>
+            </div>
+          )}
 
           {/* Fetch Error Banner */}
           {fetchError && (
-            <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-fluid-sm">
+            <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-fluid-sm animate-in fade-in duration-150">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
-              <span>{fetchError}</span>
+              <span className="text-xs font-medium">{fetchError}</span>
             </div>
           )}
 
           {/* Preview Card */}
           {preview && (
-            <div className="pt-2 animate-in fade-in slide-in-from-top-3 duration-200">
+            <div className="pt-2">
               <ChannelPreviewCard preview={preview} onAdd={handleAddChannel} isAdding={isAdding} />
             </div>
           )}
@@ -417,17 +510,22 @@ export default function ManageChannelsPage() {
 
         {/* ── 2. Added Channels List ── */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-fluid-lg text-content-primary">
-              Your Added Channels ({channels.length})
-            </h2>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-bold text-fluid-lg text-content-primary">
+                Your Added Channels ({channels.length})
+              </h2>
+              <p className="text-[11px] text-content-secondary">
+                Control which channels are visible to your children
+              </p>
+            </div>
             <button
               type="button"
               onClick={loadChannelsList}
               disabled={loadingChannels}
-              className="inline-flex items-center gap-1.5 text-xs text-content-secondary hover:text-brand-primary transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface-elevated border border-border/80 text-xs font-semibold text-content-secondary hover:text-brand-primary transition-all active:scale-95 shadow-xs"
             >
-              <RefreshCw size={14} className={cn(loadingChannels && 'animate-spin')} />
+              <RefreshCw size={13} className={cn(loadingChannels && 'animate-spin text-brand-primary')} />
               <span>Reload</span>
             </button>
           </div>
@@ -475,7 +573,7 @@ export default function ManageChannelsPage() {
                     {(isPolling || isStalled || ch.sync_status === 'in_progress' || ch.sync_status === 'pending') && (
                       <div
                         className={cn(
-                          'mx-1 px-4 py-3 rounded-b-2xl border border-t-0 space-y-2',
+                          'w-full max-w-full overflow-hidden px-4 py-3 rounded-b-2xl border border-t-0 space-y-2',
                           isStalled
                             ? 'bg-amber-500/5 border-amber-500/20'
                             : 'bg-brand-primary/5 border-brand-primary/15'
@@ -537,7 +635,7 @@ export default function ManageChannelsPage() {
 
                     {/* Complete badge */}
                     {progress?.status === 'complete' && (
-                      <div className="mx-1 px-4 py-2 rounded-b-2xl border border-t-0 bg-emerald-500/5 border-emerald-500/20">
+                      <div className="w-full max-w-full overflow-hidden px-4 py-2 rounded-b-2xl border border-t-0 bg-emerald-500/5 border-emerald-500/20">
                         <div className="flex items-center gap-2 text-emerald-500">
                           <CheckCircle2 size={14} />
                           <span className="text-xs font-semibold">

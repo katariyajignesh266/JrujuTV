@@ -26,6 +26,7 @@ export function PageShell({ children, className, fullWidth }: PageShellProps) {
         sidebarOpen && 'xl:ml-60',
         // Inner padding
         'px-3 sm:px-4 md:px-6 pt-4 md:pt-6',
+        'w-full max-w-full overflow-x-hidden',
         !fullWidth && 'max-w-screen-2xl mx-auto',
         className
       )}
