@@ -18,13 +18,19 @@ export function DesktopHeader() {
     <header
       className={cn(
         'sticky top-0 z-50 h-14',
-        'bg-surface-primary/80 backdrop-blur-xl',
-        'border-b border-white/10 dark:border-white/5',
-        'shadow-[0_1px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_24px_rgba(0,0,0,0.25)]',
+        /* Premium glass */
+        'bg-white/80 dark:bg-[#080810]/88 backdrop-blur-2xl',
+        /* Refined border */
+        'border-b border-neutral-200/60 dark:border-white/[0.05]',
+        /* Layered shadow */
+        'shadow-[0_1px_20px_rgba(0,0,0,0.06),0_1px_0_rgba(0,0,0,0.03)] dark:shadow-[0_1px_32px_rgba(0,0,0,0.50),0_1px_0_rgba(255,255,255,0.02)]',
         'transition-theme',
         'hidden md:flex items-center gap-3 pl-3 pr-4' // Visible on tablet (768px) and desktop
       )}
     >
+      {/* Subtle top shimmer line */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/20 to-transparent pointer-events-none" />
+
       {/* Left: Hamburger + Logo */}
       <div className="flex items-center gap-3 shrink-0">
         <IconButton
@@ -34,7 +40,7 @@ export function DesktopHeader() {
           aria-expanded={sidebarOpen}
           aria-controls="sidebar-drawer"
         />
-        <Link href="/" aria-label="JruJu TV home" className="flex items-center">
+        <Link href="/" aria-label="JruJu TV home" className="flex items-center transition-transform duration-200 active:scale-95">
           <Logo size="sm" variant="full" />
         </Link>
       </div>

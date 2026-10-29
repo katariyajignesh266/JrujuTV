@@ -35,22 +35,23 @@ export function IconButton({
       aria-label={label}
       className={cn(
         'group relative inline-flex items-center justify-center rounded-full',
-        'min-touch transition-theme',
+        'min-touch transition-all duration-200',
         btnSizes[size],
         variant === 'ghost' && [
-          'text-content-secondary hover:text-content-primary',
-          'hover:bg-surface-secondary dark:hover:bg-surface-secondary',
-          'focus-visible:ring-2 focus-visible:ring-brand-primary',
+          'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
+          'hover:bg-neutral-100/80 dark:hover:bg-white/[0.07]',
+          'focus-visible:ring-2 focus-visible:ring-red-500/50',
         ],
         variant === 'filled' && [
-          'bg-brand-primary text-white',
-          'hover:opacity-90 active:scale-95',
+          'bg-gradient-to-br from-red-500 to-rose-600 text-white',
+          'shadow-md shadow-red-500/25 hover:shadow-lg hover:shadow-red-500/35',
+          'hover:opacity-95 active:scale-95',
         ],
         variant === 'outline' && [
-          'border border-border text-content-primary',
-          'hover:bg-surface-secondary',
+          'border border-[var(--color-border)] text-[var(--color-text-primary)]',
+          'hover:bg-[var(--color-bg-secondary)]',
         ],
-        'transition-all duration-150 active:scale-95',
+        'active:scale-90',
         className
       )}
       {...props}
@@ -60,7 +61,7 @@ export function IconButton({
         {badge !== undefined && badge > 0 && (
           <span
             aria-label={`${badge} notifications`}
-            className="absolute -top-1 -right-1.5 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-brand-primary text-white text-[10px] font-bold leading-none ring-2 ring-surface-primary group-hover:ring-surface-secondary shadow-sm shadow-brand-primary/30 pointer-events-none select-none transition-colors"
+            className="absolute -top-1 -right-1.5 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-rose-600 text-white text-[9.5px] font-bold leading-none ring-2 ring-[var(--color-bg-primary)] shadow-sm shadow-red-500/30 pointer-events-none select-none transition-colors"
           >
             {badge > 9 ? '9+' : badge}
           </span>
@@ -69,4 +70,3 @@ export function IconButton({
     </button>
   );
 }
-

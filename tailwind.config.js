@@ -28,12 +28,15 @@ module.exports = {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Poppins', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['Outfit', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         sm: 'var(--shadow-sm)',
         md: 'var(--shadow-md)',
         lg: 'var(--shadow-lg)',
+        glow: 'var(--shadow-glow)',
+        'glow-lg': '0 0 50px rgba(229, 57, 53, 0.35)',
+        'inner-glow': 'inset 0 1px 0 rgba(255,255,255,0.10)',
       },
       screens: {
         xs: '375px',
@@ -48,8 +51,16 @@ module.exports = {
         'safe-bottom': 'env(safe-area-inset-bottom)',
         'safe-top': 'env(safe-area-inset-top)',
       },
+      transitionDuration: {
+        '250': '250ms',
+        '350': '350ms',
+        '400': '400ms',
+      },
+      borderRadius: {
+        '4xl': '2rem',
+        '5xl': '2.5rem',
+      },
     },
   },
   plugins: [],
 };
-

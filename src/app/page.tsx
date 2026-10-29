@@ -148,7 +148,12 @@ export default function HomePage() {
               type="button"
               onClick={handleRefresh}
               disabled={loading}
-              className="shrink-0 p-2 rounded-full text-content-secondary hover:text-brand-primary hover:bg-surface-secondary transition-colors"
+              className={cn(
+                'shrink-0 p-2 rounded-full transition-all duration-200 active:scale-90',
+                'text-[var(--color-text-secondary)] hover:text-red-500 dark:hover:text-red-400',
+                'hover:bg-red-500/8 dark:hover:bg-red-500/12',
+                loading && 'opacity-60'
+              )}
               title="Shuffle feed"
             >
               <RefreshCw size={15} className={cn(loading && 'animate-spin')} />
@@ -199,9 +204,9 @@ export default function HomePage() {
           {/* Continuous look-ahead pre-load indicator */}
           {loadingMore && (
             <div className="pt-6 pb-4 flex justify-center">
-              <div className="flex items-center gap-2 text-content-secondary">
-                <Loader2 size={16} className="animate-spin text-brand-primary" />
-                <span className="text-fluid-sm">Loading more videos…</span>
+              <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] shadow-sm">
+                <Loader2 size={15} className="animate-spin text-red-500" />
+                <span className="text-[12px] font-medium text-[var(--color-text-secondary)]">Loading more videos…</span>
               </div>
             </div>
           )}
@@ -253,7 +258,9 @@ export default function HomePage() {
           {/* State 2: Genuine end — all channels fully synced AND no more DB rows */}
           {!hasMore && !loading && videos.length > 0 && allChannelsSynced && (
             <div className="pt-6 pb-4 flex justify-center">
-              <p className="text-xs text-content-secondary">You&apos;ve reached the end of your feed</p>
+              <p className="text-[11px] font-medium text-[var(--color-text-disabled)] tracking-wide uppercase">
+                — You&apos;ve reached the end of your feed —
+              </p>
             </div>
           )}
         </section>
@@ -261,6 +268,17 @@ export default function HomePage() {
     </PageShell>
   );
 }
+
+const CATEGORY_EMOJIS: Record<string, string> = {
+  All: '✨',
+  Bhajans: '🎵',
+  Stories: '📖',
+  Education: '🎓',
+  Cartoons: '🎨',
+  Nature: '🌿',
+  Festivals: '🎉',
+  Yoga: '🧘',
+};
 
 function CategoryChips({
   activeCategory,
@@ -275,7 +293,7 @@ function CategoryChips({
     <nav aria-label="Content categories" className="relative flex-1 min-w-0">
       <ul
         role="list"
-        className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1"
+        className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1"
         style={{ scrollbarWidth: 'none' }}
       >
         {categories.map((cat) => {
@@ -286,15 +304,27 @@ function CategoryChips({
                 type="button"
                 onClick={() => onSelect(cat)}
                 className={cn(
-                  'px-3.5 py-1 rounded-full text-[11.5px] font-medium transition-all duration-200 whitespace-nowrap',
-                  'focus-visible:ring-2 focus-visible:ring-brand-primary',
+                  'px-3.5 py-[6px] rounded-full text-[12px] font-semibold transition-all duration-200 whitespace-nowrap flex items-center gap-1.5',
+                  'focus-visible:ring-2 focus-visible:ring-red-500/60 active:scale-95',
                   isSelected
-                    ? 'bg-content-primary text-surface-primary shadow-sm font-semibold'
-                    : 'bg-neutral-900/5 dark:bg-white/5 border border-neutral-900/10 dark:border-white/10 text-content-secondary hover:bg-neutral-900/10 dark:hover:bg-white/10 hover:text-content-primary'
+                    ? [
+                        'bg-gradient-to-r from-red-500 to-rose-600 text-white',
+                        'shadow-[0_3px_14px_rgba(229,57,53,0.40)] dark:shadow-[0_3px_18px_rgba(229,57,53,0.50)]',
+                        'border border-transparent',
+                      ]
+                    : [
+                        'bg-white/70 dark:bg-white/[0.05] backdrop-blur-sm',
+                        'border border-neutral-200/80 dark:border-white/[0.08]',
+                        'text-[var(--color-text-secondary)]',
+                        'hover:bg-white dark:hover:bg-white/[0.09] hover:text-[var(--color-text-primary)]',
+                        'hover:border-neutral-300/80 dark:hover:border-white/[0.14]',
+                        'hover:shadow-sm dark:hover:shadow-black/20',
+                      ]
                 )}
                 aria-pressed={isSelected}
               >
-                {cat}
+                <span className="text-[11px] leading-none">{CATEGORY_EMOJIS[cat]}</span>
+                <span>{cat}</span>
               </button>
             </li>
           );
