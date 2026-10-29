@@ -106,13 +106,7 @@ export function BottomNavBar() {
                     />
                   )}
 
-                  {/* Active dot indicator */}
-                  {isActive && (
-                    <span
-                      className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-[3px] w-4 rounded-full bg-gradient-to-r from-red-500 to-rose-600 shadow-[0_0_6px_rgba(229,57,53,0.6)]"
-                      aria-hidden="true"
-                    />
-                  )}
+
                 </div>
 
                 <span
