@@ -124,57 +124,71 @@ export default function ChannelDetailPage({
   return (
     <PageShell>
       <div className="max-w-7xl mx-auto space-y-6 pb-16">
-        {/* Navigation & Header */}
-        <div className="flex items-center gap-3">
+        {/* Navigation */}
+        <div className="flex items-center gap-2">
           <Link
             href="/channels"
-            className="p-2 -ml-2 rounded-2xl text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+            className={cn(
+              'inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl text-sm font-semibold',
+              'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white',
+              'bg-white dark:bg-white/[0.05] border border-neutral-200 dark:border-white/[0.08]',
+              'hover:border-neutral-300 dark:hover:border-red-400/30 hover:bg-neutral-50 dark:hover:bg-white/[0.08]',
+              'active:scale-95 transition-all duration-150 shadow-xs'
+            )}
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={16} />
+            <span>All Channels</span>
           </Link>
-          <span className="text-fluid-sm text-content-secondary font-medium">All Channels</span>
         </div>
 
         {/* Channel Banner / Header Card */}
         {channel ? (
-          <div className="rounded-3xl bg-surface-secondary border border-border p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-              <div className="relative h-24 w-24 rounded-full overflow-hidden bg-surface-elevated border-2 border-brand-primary/30 shrink-0 shadow-lg">
-                {channel.thumbnail_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={channel.thumbnail_url}
-                    alt={channel.title}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center font-bold text-3xl text-brand-primary">
-                    {channel.title.charAt(0)}
-                  </div>
-                )}
+          <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#1a1a2e]/80 backdrop-blur-xl border border-neutral-200 dark:border-white/[0.07] shadow-lg p-6 sm:p-7">
+            {/* Decorative corner glow */}
+            <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-red-500/10 dark:bg-red-500/15 blur-3xl pointer-events-none" />
+            {/* Top accent line */}
+            <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-red-500 via-rose-400 to-red-600 rounded-t-3xl" />
+
+            <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              {/* Avatar with glow ring */}
+              <div className="relative shrink-0">
+                <div className="absolute -inset-2 rounded-full bg-gradient-to-br from-red-500/20 to-rose-500/20 blur-md opacity-60" />
+                <div className="relative h-24 w-24 rounded-full overflow-hidden bg-neutral-100 dark:bg-white/[0.05] border-2 border-red-400/40 shadow-xl">
+                  {channel.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={channel.thumbnail_url}
+                      alt={channel.title}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center font-bold text-3xl text-red-500 bg-gradient-to-br from-red-500/10 to-rose-500/10">
+                      {channel.title.charAt(0)}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex-1 text-center sm:text-left min-w-0 space-y-1.5">
-                <h1 className="font-display font-bold text-fluid-xl text-content-primary truncate">
+              <div className="flex-1 text-center sm:text-left min-w-0 space-y-2">
+                <h1 className="font-extrabold text-2xl sm:text-3xl text-neutral-900 dark:text-white tracking-tight truncate">
                   {channel.title}
                 </h1>
-                <p className="text-fluid-sm text-content-secondary">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">
                   {channel.subscriber_count > 0 &&
                     `${formatCompactNumber(channel.subscriber_count)} subscribers`}
                   {channel.subscriber_count > 0 && channel.video_count > 0 && ' · '}
                   {channel.video_count > 0 &&
                     `${formatCompactNumber(channel.video_count)} videos`}
                 </p>
-                <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
+                <div className="pt-0.5 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
                     Safe Curated Content
                   </span>
-                  <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-surface-elevated text-content-secondary border border-border">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-white/[0.08]">
                     5+ Min Long Form
                   </span>
-                  {/* Sync status badge */}
                   {isImporting && (
                     <span className="flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                       <Loader2 size={10} className="animate-spin" />
@@ -192,22 +206,24 @@ export default function ChannelDetailPage({
                 </div>
               </div>
 
-              {/* Parent manual sync button */}
+              {/* Parent sync button */}
               {role === 'parent' && (
-                <div className="shrink-0 mt-3 sm:mt-0">
+                <div className="shrink-0 mt-2 sm:mt-0">
                   <button
                     type="button"
                     onClick={handleManualSync}
                     disabled={isSyncing}
                     className={cn(
-                      'inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-fluid-sm font-semibold',
-                      'bg-surface-elevated border border-border text-content-primary',
-                      'hover:border-brand-primary/50 active:scale-95 transition-all disabled:opacity-50'
+                      'inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold',
+                      'bg-neutral-100 dark:bg-white/[0.06] border border-neutral-200 dark:border-white/[0.08]',
+                      'text-neutral-700 dark:text-neutral-200',
+                      'hover:border-red-400/40 dark:hover:border-red-400/30 hover:bg-red-500/5 dark:hover:bg-red-500/10',
+                      'active:scale-95 transition-all disabled:opacity-50 shadow-xs'
                     )}
                   >
                     <RefreshCw
-                      size={16}
-                      className={cn(isSyncing && 'animate-spin text-brand-primary')}
+                      size={15}
+                      className={cn(isSyncing && 'animate-spin text-red-500 dark:text-red-400')}
                     />
                     <span>
                       {isSyncing
@@ -221,16 +237,16 @@ export default function ChannelDetailPage({
               )}
             </div>
 
-            {/* Inline progress bar for importing channels */}
+            {/* Import progress bar */}
             {isImporting && syncedCount > 0 && totalCount > 0 && (
-              <div className="mt-4 space-y-1.5">
-                <div className="flex justify-between text-[11px] text-content-secondary">
+              <div className="mt-5 space-y-2">
+                <div className="flex justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
                   <span>Import progress</span>
-                  <span>{Math.round((syncedCount / totalCount) * 100)}%</span>
+                  <span className="font-semibold text-neutral-700 dark:text-neutral-200">{Math.round((syncedCount / totalCount) * 100)}%</span>
                 </div>
-                <div className="h-1.5 bg-amber-500/10 rounded-full overflow-hidden">
+                <div className="h-2 bg-neutral-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-amber-500 rounded-full transition-all duration-700"
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-700 shadow-sm"
                     style={{ width: `${Math.min(100, Math.round((syncedCount / totalCount) * 100))}%` }}
                   />
                 </div>
@@ -238,32 +254,43 @@ export default function ChannelDetailPage({
             )}
           </div>
         ) : loading ? (
-          <div className="h-32 rounded-3xl bg-surface-secondary animate-pulse" />
+          <div className="h-36 rounded-3xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/[0.06] animate-pulse" />
         ) : null}
 
         {/* Video List Section — Virtualized with look-ahead pagination */}
         <div className="space-y-4">
-          <h2 className="font-semibold text-fluid-lg text-content-primary">
-            Uploaded Videos {videos.length > 0 && `(${videos.length.toLocaleString()}${hasMore ? '+' : ''})`}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="font-bold text-xl text-neutral-900 dark:text-white tracking-tight">
+              Uploaded Videos
+            </h2>
+            {videos.length > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                {videos.length.toLocaleString()}{hasMore ? '+' : ''}
+              </span>
+            )}
+          </div>
 
           {loading ? (
             <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6">
               <VideoCardSkeleton count={8} />
             </div>
           ) : videos.length === 0 && syncStatus === 'complete' ? (
-            <div className="flex flex-col items-center justify-center p-12 text-center rounded-3xl bg-surface-secondary border border-border space-y-2">
-              <Tv2 className="h-10 w-10 text-content-secondary mb-1" />
-              <p className="font-semibold text-content-primary">No videos found</p>
-              <p className="text-fluid-sm text-content-secondary">
+            <div className="flex flex-col items-center justify-center p-12 text-center rounded-3xl bg-white dark:bg-white/[0.04] border border-neutral-200 dark:border-white/[0.06] space-y-3">
+              <div className="h-16 w-16 rounded-2xl bg-neutral-100 dark:bg-white/[0.06] flex items-center justify-center mb-1">
+                <Tv2 className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+              </div>
+              <p className="font-bold text-neutral-900 dark:text-white text-lg">No videos found</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xs">
                 This channel does not have any videos over 5 minutes yet.
               </p>
             </div>
           ) : videos.length === 0 && isImporting ? (
-            <div className="flex flex-col items-center justify-center p-12 text-center rounded-3xl bg-surface-secondary border border-border space-y-2">
-              <Loader2 className="h-10 w-10 text-brand-primary animate-spin mb-1" />
-              <p className="font-semibold text-content-primary">Importing videos…</p>
-              <p className="text-fluid-sm text-content-secondary">
+            <div className="flex flex-col items-center justify-center p-12 text-center rounded-3xl bg-white dark:bg-white/[0.04] border border-neutral-200 dark:border-white/[0.06] space-y-3">
+              <div className="h-16 w-16 rounded-2xl bg-red-500/10 flex items-center justify-center mb-1">
+                <Loader2 className="h-8 w-8 text-red-500 animate-spin" />
+              </div>
+              <p className="font-bold text-neutral-900 dark:text-white text-lg">Importing videos…</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xs">
                 Videos will appear here as they are imported. Large channels may take a few minutes.
               </p>
             </div>
