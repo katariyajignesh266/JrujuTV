@@ -543,8 +543,8 @@ export default function ProfilePage() {
             MODAL: MANAGE CHILDREN
             ══════════════════════════════════════════════════════════════════ */}
         {showManageChildren && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
-            <div className="relative w-full max-w-md bg-surface-elevated/98 backdrop-blur-2xl rounded-3xl border border-border/85 p-6 shadow-2xl animate-in zoom-in-95 overflow-hidden">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+            <div className="relative w-full max-w-md bg-white dark:bg-[#18181b] rounded-3xl border border-neutral-200 dark:border-neutral-800 p-6 shadow-2xl animate-in zoom-in-95 overflow-hidden">
               {/* Decorative top accent gradient */}
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-purple-500 to-amber-500" />
               {/* Soft ambient glow in top-right */}
@@ -558,14 +558,14 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-display font-bold text-fluid-lg text-content-primary leading-tight">
+                      <h3 className="font-display font-bold text-fluid-lg text-neutral-900 dark:text-white leading-tight">
                         Manage Children
                       </h3>
-                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
+                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50">
                         {childrenList.length}
                       </span>
                     </div>
-                    <p className="text-[11.5px] text-content-secondary mt-0.5">
+                    <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 mt-0.5">
                       Profiles, PIN security & watch analytics
                     </p>
                   </div>
@@ -573,7 +573,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowManageChildren(false)}
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                   aria-label="Close"
                 >
                   <X size={18} />
@@ -581,16 +581,16 @@ export default function ProfilePage() {
               </div>
 
               {loadingChildren ? (
-                <div className="py-12 text-center text-content-secondary flex flex-col items-center justify-center gap-3">
-                  <Loader2 size={24} className="animate-spin text-brand-primary" />
+                <div className="py-12 text-center text-neutral-500 flex flex-col items-center justify-center gap-3">
+                  <Loader2 size={24} className="animate-spin text-red-600" />
                   <span className="text-fluid-sm font-semibold">Loading child accounts…</span>
                 </div>
               ) : childrenList.length === 0 ? (
                 <div className="py-10 text-center space-y-3.5">
-                  <div className="h-16 w-16 rounded-3xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary mx-auto shadow-sm">
+                  <div className="h-16 w-16 rounded-3xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 flex items-center justify-center text-red-600 mx-auto shadow-sm">
                     <User size={30} />
                   </div>
-                  <p className="text-content-secondary text-fluid-sm max-w-xs mx-auto">
+                  <p className="text-neutral-500 dark:text-neutral-400 text-fluid-sm max-w-xs mx-auto">
                     No child accounts yet. Add a child to set up their own safe profile with PIN protection.
                   </p>
                   <button
@@ -611,9 +611,9 @@ export default function ProfilePage() {
                     <div
                       key={child.id}
                       className={cn(
-                        'group relative p-3.5 sm:p-4 rounded-2xl bg-surface-secondary/75 border border-border/80',
+                        'group relative p-3.5 sm:p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/70 border border-neutral-200/90 dark:border-neutral-800',
                         'flex flex-col gap-2.5 transition-all duration-200',
-                        editingChildId !== child.id && 'cursor-pointer hover:bg-surface-elevated hover:border-brand-primary/40 hover:shadow-md'
+                        editingChildId !== child.id && 'cursor-pointer hover:bg-neutral-100/80 dark:hover:bg-neutral-800/80 hover:border-red-300 dark:hover:border-red-900/50 hover:shadow-md'
                       )}
                       onClick={() => {
                         if (editingChildId === child.id) return;
@@ -633,7 +633,7 @@ export default function ProfilePage() {
                           )}
                         >
                           {child.display_name.charAt(0).toUpperCase()}
-                          <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-[9px] text-amber-500 shadow-2xs">
+                          <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center text-[9px] text-amber-500 shadow-2xs">
                             ★
                           </div>
                         </div>
@@ -646,31 +646,31 @@ export default function ProfilePage() {
                                 type="text"
                                 value={editDisplayName}
                                 onChange={(e) => setEditDisplayName(e.target.value)}
-                                className="h-9 px-2.5 rounded-xl bg-surface-elevated border border-border text-fluid-sm text-content-primary w-full focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                className="h-9 px-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-fluid-sm text-neutral-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-red-500"
                                 autoFocus
                               />
                               <button
                                 type="button"
                                 onClick={() => handleSaveEdit(child.id)}
                                 disabled={editLoading}
-                                className="h-9 w-9 rounded-xl bg-brand-primary text-white flex items-center justify-center shrink-0 active:scale-95 shadow-xs"
+                                className="h-9 w-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 active:scale-95 shadow-xs"
                               >
                                 <Check size={14} />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setEditingChildId(null)}
-                                className="h-9 w-9 rounded-xl bg-surface-elevated border border-border text-content-secondary flex items-center justify-center shrink-0 active:scale-95"
+                                className="h-9 w-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 flex items-center justify-center shrink-0 active:scale-95"
                               >
                                 <X size={14} />
                               </button>
                             </div>
                           ) : (
                             <>
-                              <p className="font-bold text-content-primary text-fluid-base truncate tracking-tight group-hover:text-brand-primary transition-colors">
+                              <p className="font-bold text-neutral-900 dark:text-white text-fluid-base truncate tracking-tight group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
                                 {child.display_name}
                               </p>
-                              <p className="text-[11.5px] text-content-secondary font-mono truncate">
+                              <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 font-mono truncate">
                                 @{child.username}
                               </p>
                             </>
@@ -679,14 +679,14 @@ export default function ProfilePage() {
 
                         {/* Right: Edit + Delete */}
                         {editingChildId !== child.id && (
-                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingChildId(child.id);
                                 setEditDisplayName(child.display_name);
                               }}
-                              className="h-8 w-8 rounded-xl flex items-center justify-center text-content-secondary hover:text-content-primary bg-surface-elevated border border-border/70 hover:border-brand-primary/40 transition-colors shadow-2xs"
+                              className="h-8 w-8 rounded-xl flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 transition-colors shadow-2xs"
                               aria-label={`Edit ${child.display_name}`}
                               title="Edit Name"
                             >
@@ -695,7 +695,7 @@ export default function ProfilePage() {
                             <button
                               type="button"
                               onClick={() => handleDeleteChild(child.id, child.display_name)}
-                              className="h-8 w-8 rounded-xl flex items-center justify-center text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-colors shadow-2xs"
+                              className="h-8 w-8 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400 hover:text-white bg-red-50 dark:bg-red-950/40 hover:bg-red-600 dark:hover:bg-red-600 border border-red-200 dark:border-red-900/40 hover:border-red-600 transition-colors shadow-2xs"
                               aria-label={`Delete ${child.display_name}`}
                               title="Delete Account"
                             >
@@ -707,9 +707,9 @@ export default function ProfilePage() {
 
                       {/* Bottom Row: Watch time pill + Activity hint */}
                       {editingChildId !== child.id && (
-                        <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[11px]">
-                          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-elevated/80 border border-border/60 text-content-secondary font-medium">
-                            <Clock size={11} className="text-brand-primary" />
+                        <div className="flex items-center justify-between pt-2 border-t border-neutral-200/70 dark:border-neutral-800 text-[11px]">
+                          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 font-medium">
+                            <Clock size={11} className="text-red-600 dark:text-red-400" />
                             <span>
                               {loadingToday
                                 ? '…'
@@ -718,7 +718,7 @@ export default function ProfilePage() {
                                 : '0m watched today'}
                             </span>
                           </div>
-                          <span className="font-semibold text-brand-primary flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                          <span className="font-semibold text-red-600 dark:text-red-400 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                             View Activity <ChevronRight size={12} />
                           </span>
                         </div>
@@ -733,22 +733,22 @@ export default function ProfilePage() {
                       setShowManageChildren(false);
                       setShowAddChild(true);
                     }}
-                    className="group relative w-full mt-4 p-4 rounded-2xl border-2 border-dashed border-brand-primary/30 hover:border-brand-primary/70 bg-gradient-to-r from-brand-primary/[0.04] via-purple-500/[0.04] to-brand-secondary/[0.04] hover:bg-brand-primary/[0.08] transition-all flex items-center justify-between active:scale-[0.99] shadow-xs"
+                    className="group relative w-full mt-4 p-4 rounded-2xl border-2 border-dashed border-red-300 dark:border-red-900/50 hover:border-red-500 bg-red-50/40 dark:bg-red-950/20 hover:bg-red-50/80 dark:hover:bg-red-950/40 transition-all flex items-center justify-between active:scale-[0.99] shadow-xs"
                   >
                     <div className="flex items-center gap-3.5 text-left">
                       <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-secondary text-white flex items-center justify-center shadow-md shadow-brand-primary/25 group-hover:scale-105 group-hover:rotate-3 transition-transform">
                         <Plus size={18} strokeWidth={2.5} />
                       </div>
                       <div>
-                        <p className="font-bold text-fluid-sm text-content-primary group-hover:text-brand-primary transition-colors">
+                        <p className="font-bold text-fluid-sm text-neutral-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
                           Add Another Child
                         </p>
-                        <p className="text-[11.5px] text-content-secondary">
+                        <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400">
                           Set up PIN code, safe filters & watch limits
                         </p>
                       </div>
                     </div>
-                    <div className="h-7 w-7 rounded-full bg-surface-elevated border border-border/70 flex items-center justify-center text-content-disabled group-hover:text-brand-primary group-hover:border-brand-primary/40 transition-all shadow-xs">
+                    <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center text-neutral-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-all shadow-xs">
                       <ChevronRight size={14} />
                     </div>
                   </button>
@@ -762,8 +762,8 @@ export default function ProfilePage() {
             MODAL: ADD CHILD (Create Child Account)
             ══════════════════════════════════════════════════════════════════ */}
         {showAddChild && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in">
-            <div className="relative w-full max-w-md bg-surface-elevated/98 backdrop-blur-2xl rounded-3xl border border-border/85 p-6 shadow-2xl animate-in zoom-in-95 overflow-hidden">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+            <div className="relative w-full max-w-md bg-white dark:bg-[#18181b] rounded-3xl border border-neutral-200 dark:border-neutral-800 p-6 shadow-2xl animate-in zoom-in-95 overflow-hidden">
               {/* Decorative top accent gradient */}
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-purple-500 to-amber-500" />
               {/* Soft ambient glow in top-right */}
@@ -778,17 +778,17 @@ export default function ProfilePage() {
                       setShowAddChild(false);
                       setShowManageChildren(true);
                     }}
-                    className="h-9 w-9 rounded-xl bg-surface-secondary/80 hover:bg-surface-secondary text-content-secondary hover:text-content-primary flex items-center justify-center transition-colors shadow-2xs"
+                    className="h-9 w-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white flex items-center justify-center transition-colors shadow-2xs"
                     aria-label="Back to Manage Children"
                     title="Back to children list"
                   >
                     <ArrowLeft size={18} />
                   </button>
                   <div>
-                    <h3 className="font-display font-bold text-fluid-lg text-content-primary leading-tight">
+                    <h3 className="font-display font-bold text-fluid-lg text-neutral-900 dark:text-white leading-tight">
                       Create Child Account
                     </h3>
-                    <p className="text-[11.5px] text-content-secondary mt-0.5">
+                    <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 mt-0.5">
                       Safe profile with 4-digit PIN security
                     </p>
                   </div>
@@ -796,7 +796,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowAddChild(false)}
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                   aria-label="Close"
                 >
                   <X size={18} />
@@ -804,24 +804,24 @@ export default function ProfilePage() {
               </div>
 
               {/* Live Kid Profile Avatar Preview */}
-              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-surface-secondary/70 border border-border/75 mb-4 shadow-2xs">
+              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/70 border border-neutral-200/90 dark:border-neutral-800 mb-4 shadow-2xs">
                 <div className="relative">
                   <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 text-white font-black text-xl flex items-center justify-center shadow-md shadow-orange-500/25 ring-2 ring-white/20 transition-all duration-300">
                     {childDisplayName.trim() ? childDisplayName.trim().charAt(0).toUpperCase() : '★'}
                   </div>
-                  <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 border-2 border-surface-elevated flex items-center justify-center text-[8px] text-white font-bold">
+                  <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white dark:border-neutral-800 flex items-center justify-center text-[8px] text-white font-bold">
                     ✓
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-fluid-sm text-content-primary truncate leading-tight">
+                  <p className="font-bold text-fluid-sm text-neutral-900 dark:text-white truncate leading-tight">
                     {childDisplayName.trim() || 'Child Name'}
                   </p>
-                  <p className="text-[11.5px] text-content-secondary font-mono truncate mt-0.5">
+                  <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 font-mono truncate mt-0.5">
                     @{childUsername.trim() || 'username'}
                   </p>
                 </div>
-                <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-2.5 py-1 rounded-full shrink-0">
+                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/50 px-2.5 py-1 rounded-full shrink-0">
                   Profile Preview
                 </span>
               </div>
@@ -829,11 +829,11 @@ export default function ProfilePage() {
               <form onSubmit={handleAddChild} className="space-y-3.5">
                 {/* Child Display Name */}
                 <div className="space-y-1.5">
-                  <label className="text-[12.5px] font-bold text-content-primary block" htmlFor="new-child-name">
+                  <label className="text-[12.5px] font-bold text-neutral-800 dark:text-neutral-200 block" htmlFor="new-child-name">
                     Child Display Name
                   </label>
                   <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-surface-elevated border border-border/70 flex items-center justify-center text-content-secondary">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center text-neutral-500">
                       <Smile size={14} className="text-amber-500" />
                     </div>
                     <input
@@ -843,7 +843,7 @@ export default function ProfilePage() {
                       value={childDisplayName}
                       onChange={(e) => setChildDisplayName(e.target.value)}
                       placeholder="e.g. Maya, Aarav, Jruu"
-                      className="w-full h-12 pl-12 pr-4 rounded-2xl bg-surface-secondary/75 border border-border/80 text-fluid-sm text-content-primary focus:outline-none focus:bg-surface-elevated focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all shadow-2xs font-medium"
+                      className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-fluid-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-2xs font-medium"
                     />
                   </div>
                 </div>
@@ -851,17 +851,17 @@ export default function ProfilePage() {
                 {/* Unique Username */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[12.5px] font-bold text-content-primary block" htmlFor="new-child-username">
+                    <label className="text-[12.5px] font-bold text-neutral-800 dark:text-neutral-200 block" htmlFor="new-child-username">
                       Unique Username
                     </label>
                     {/* Live status badge */}
                     {usernameStatus === 'available' && (
-                      <span className="text-[11px] font-bold text-emerald-500 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                         <CheckCircle2 size={12} /> Available
                       </span>
                     )}
                     {usernameStatus === 'taken' && (
-                      <span className="text-[11px] font-bold text-red-500 flex items-center gap-1 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                      <span className="text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1 bg-red-50 dark:bg-red-950/50 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-800">
                         <AlertCircle size={12} /> Already taken
                       </span>
                     )}
@@ -871,13 +871,13 @@ export default function ProfilePage() {
                       </span>
                     )}
                     {usernameStatus === 'checking' && (
-                      <span className="text-[11px] text-content-secondary flex items-center gap-1">
-                        <Loader2 size={12} className="animate-spin text-brand-primary" /> Checking…
+                      <span className="text-[11px] text-neutral-500 flex items-center gap-1">
+                        <Loader2 size={12} className="animate-spin text-red-600" /> Checking…
                       </span>
                     )}
                   </div>
                   <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-surface-elevated border border-border/70 flex items-center justify-center text-content-secondary font-mono text-xs font-bold text-brand-primary">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center font-mono text-xs font-bold text-red-600 dark:text-red-400">
                       @
                     </div>
                     <input
@@ -891,12 +891,12 @@ export default function ProfilePage() {
                       }}
                       placeholder="e.g. maya-star"
                       className={cn(
-                        'w-full h-12 pl-12 pr-10 rounded-2xl bg-surface-secondary/75 border text-fluid-sm text-content-primary font-mono focus:outline-none focus:bg-surface-elevated focus:ring-2 transition-all shadow-2xs font-medium',
+                        'w-full h-12 pl-12 pr-10 rounded-2xl bg-white dark:bg-neutral-900 border text-fluid-sm text-neutral-900 dark:text-white font-mono focus:outline-none focus:ring-4 transition-all shadow-2xs font-medium',
                         usernameStatus === 'taken' || usernameStatus === 'invalid'
-                          ? 'border-red-500 focus:ring-red-500/40'
+                          ? 'border-red-500 focus:ring-red-500/20'
                           : usernameStatus === 'available'
-                          ? 'border-emerald-500 focus:ring-emerald-500/40'
-                          : 'border-border/80 focus:ring-brand-primary/40 focus:border-brand-primary'
+                          ? 'border-emerald-500 focus:ring-emerald-500/20'
+                          : 'border-neutral-300 dark:border-neutral-700 focus:border-red-500 focus:ring-red-500/10'
                       )}
                     />
                   </div>
@@ -905,16 +905,16 @@ export default function ProfilePage() {
                 {/* Password / 4-Digit PIN */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[12.5px] font-bold text-content-primary block" htmlFor="new-child-pin">
+                    <label className="text-[12.5px] font-bold text-neutral-800 dark:text-neutral-200 block" htmlFor="new-child-pin">
                       Child 4-Digit PIN / Password
                     </label>
-                    <span className="text-[11px] text-content-secondary">
+                    <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
                       For child login
                     </span>
                   </div>
                   <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-surface-elevated border border-border/70 flex items-center justify-center text-content-secondary">
-                      <Lock size={13} className="text-purple-500" />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center">
+                      <Lock size={13} className="text-purple-600 dark:text-purple-400" />
                     </div>
                     <input
                       id="new-child-pin"
@@ -923,12 +923,12 @@ export default function ProfilePage() {
                       value={childPin}
                       onChange={(e) => setChildPin(e.target.value)}
                       placeholder="••••"
-                      className="w-full h-12 pl-12 pr-11 rounded-2xl bg-surface-secondary/75 border border-border/80 text-fluid-sm text-content-primary tracking-widest font-mono focus:outline-none focus:bg-surface-elevated focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all shadow-2xs font-semibold"
+                      className="w-full h-12 pl-12 pr-11 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-fluid-sm text-neutral-900 dark:text-white tracking-widest font-mono focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-2xs font-semibold"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPinText((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg text-content-secondary hover:text-content-primary flex items-center justify-center transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg text-neutral-500 hover:text-neutral-900 dark:hover:text-white flex items-center justify-center transition-colors"
                       aria-label={showPinText ? 'Hide PIN' : 'Show PIN'}
                       title={showPinText ? 'Hide PIN' : 'Show PIN'}
                     >
@@ -938,7 +938,7 @@ export default function ProfilePage() {
                 </div>
 
                 {addChildError && (
-                  <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-fluid-sm text-center">
+                  <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 text-fluid-sm text-center">
                     {addChildError}
                   </div>
                 )}
@@ -974,10 +974,10 @@ export default function ProfilePage() {
             Opens on card tap in Manage Children. Uses the shared ChildProgressView.
             ══════════════════════════════════════════════════════════════════ */}
         {detailChild && session && (
-          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in">
+          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
             <div
               className={cn(
-                'relative w-full sm:max-w-md bg-surface-elevated/98 backdrop-blur-2xl border border-border/85 shadow-2xl',
+                'relative w-full sm:max-w-md bg-white dark:bg-[#18181b] border border-neutral-200 dark:border-neutral-800 shadow-2xl',
                 'rounded-t-3xl sm:rounded-3xl',
                 'max-h-[92dvh] flex flex-col overflow-hidden',
                 'animate-in slide-in-from-bottom sm:zoom-in-95 duration-200'
@@ -987,14 +987,14 @@ export default function ProfilePage() {
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-purple-500 to-amber-500" />
 
               {/* Panel header */}
-              <div className="flex items-center gap-3 p-5 pt-6 border-b border-border/80 shrink-0">
+              <div className="flex items-center gap-3 p-5 pt-6 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     setDetailChild(null);
                     setShowManageChildren(true);
                   }}
-                  className="p-2 rounded-xl text-content-secondary hover:text-content-primary bg-surface-secondary/70 hover:bg-surface-secondary transition-colors"
+                  className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
                   aria-label="Back to Manage Children"
                 >
                   <ArrowLeft size={18} />
@@ -1009,15 +1009,15 @@ export default function ProfilePage() {
                   {detailChild.display_name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-content-primary text-fluid-base truncate leading-tight">
+                  <p className="font-bold text-neutral-900 dark:text-white text-fluid-base truncate leading-tight">
                     {detailChild.display_name}
                   </p>
-                  <p className="text-[11.5px] text-content-secondary font-mono">@{detailChild.username}</p>
+                  <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 font-mono">@{detailChild.username}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setDetailChild(null)}
-                  className="p-2 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="p-2 rounded-full text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                   aria-label="Close"
                 >
                   <X size={18} />
@@ -1042,10 +1042,10 @@ export default function ProfilePage() {
             child's own data — no parent-only actions.
             ══════════════════════════════════════════════════════════════════ */}
         {showMyProgress && session && role === 'child' && (
-          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in">
+          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
             <div
               className={cn(
-                'relative w-full sm:max-w-md bg-surface-elevated/98 backdrop-blur-2xl border border-border/85 shadow-2xl',
+                'relative w-full sm:max-w-md bg-white dark:bg-[#18181b] border border-neutral-200 dark:border-neutral-800 shadow-2xl',
                 'rounded-t-3xl sm:rounded-3xl',
                 'max-h-[92dvh] flex flex-col overflow-hidden',
                 'animate-in slide-in-from-bottom sm:zoom-in-95 duration-200'
@@ -1055,18 +1055,18 @@ export default function ProfilePage() {
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500" />
 
               {/* Panel header */}
-              <div className="flex items-center gap-3 p-5 pt-6 border-b border-border/80 shrink-0">
-                <div className="h-10 w-10 rounded-2xl flex items-center justify-center bg-emerald-500/15 text-emerald-500 shadow-sm">
+              <div className="flex items-center gap-3 p-5 pt-6 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+                <div className="h-10 w-10 rounded-2xl flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shadow-sm">
                   <BarChart2 size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-content-primary text-fluid-base leading-tight">Your Progress</p>
-                  <p className="text-[11.5px] text-content-secondary font-mono truncate">@{resolvedChildUsername || '…'}</p>
+                  <p className="font-bold text-neutral-900 dark:text-white text-fluid-base leading-tight">Your Progress</p>
+                  <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 font-mono truncate">@{resolvedChildUsername || '…'}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowMyProgress(false)}
-                  className="p-2 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="p-2 rounded-full text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                   aria-label="Close Your Progress"
                 >
                   <X size={18} />

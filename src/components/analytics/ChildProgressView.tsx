@@ -76,15 +76,15 @@ function StatChip({
   loading: boolean;
 }) {
   return (
-    <div className="flex-1 p-3.5 rounded-2xl bg-surface-secondary/70 border border-border/80 text-center shadow-xs">
-      <div className="h-8 w-8 rounded-xl bg-brand-primary/10 text-brand-primary flex items-center justify-center mx-auto mb-1.5 shadow-2xs">
+    <div className="flex-1 p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 text-center shadow-xs">
+      <div className="h-8 w-8 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto mb-1.5 shadow-2xs">
         <Icon size={16} />
       </div>
-      <p className="text-[10px] text-content-secondary uppercase tracking-wider font-bold">{label}</p>
+      <p className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase tracking-wider font-bold">{label}</p>
       {loading ? (
-        <div className="h-6 w-14 mx-auto mt-1 rounded-md bg-surface-elevated animate-pulse" />
+        <div className="h-6 w-14 mx-auto mt-1 rounded-md bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
       ) : (
-        <p className="font-extrabold text-content-primary text-fluid-base mt-0.5 tracking-tight">{value}</p>
+        <p className="font-extrabold text-neutral-900 dark:text-white text-fluid-base mt-0.5 tracking-tight">{value}</p>
       )}
     </div>
   );
@@ -93,20 +93,20 @@ function StatChip({
 function ProgressBadge({ pct }: { pct: number }) {
   if (pct >= 95) {
     return (
-      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 shrink-0">
+      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
         ✓ Completed
       </span>
     );
   }
   if (pct <= 2) {
     return (
-      <span className="text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-surface-elevated text-content-disabled border border-border/60 shrink-0">
+      <span className="text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 shrink-0">
         Just started
       </span>
     );
   }
   return (
-    <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20 shrink-0">
+    <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/50 shrink-0">
       {pct}% watched
     </span>
   );
@@ -375,11 +375,11 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
                 onClick={() => handleHistoryItemClick(session)}
                 className={cn(
                   'w-full flex items-start gap-3 p-3 rounded-2xl transition-all duration-150 text-left',
-                  'bg-surface-secondary/50 hover:bg-surface-secondary border border-border/50 hover:border-border active:scale-[0.99] shadow-2xs'
+                  'bg-neutral-50 dark:bg-neutral-900/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-800 active:scale-[0.99] shadow-2xs'
                 )}
               >
                 {/* Thumbnail */}
-                <div className="relative w-24 shrink-0 aspect-video rounded-xl overflow-hidden bg-surface-secondary">
+                <div className="relative w-24 shrink-0 aspect-video rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-800">
                   {session.video_thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -390,7 +390,7 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
-                      <PlayCircle size={20} className="text-content-disabled" />
+                      <PlayCircle size={20} className="text-neutral-400" />
                     </div>
                   )}
                   {/* Progress bar overlay */}
@@ -406,14 +406,14 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
 
                 {/* Meta */}
                 <div className="flex-1 min-w-0 pt-0.5">
-                  <p className="text-[13px] font-semibold text-content-primary leading-snug line-clamp-2 mb-1">
+                  <p className="text-[13px] font-semibold text-neutral-900 dark:text-white leading-snug line-clamp-2 mb-1">
                     {session.video_title}
                   </p>
-                  <p className="text-[11px] text-content-secondary truncate mb-1.5">
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mb-1.5">
                     {session.channel_name}
                   </p>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] text-content-disabled">
+                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
                       {formatRelativeTime(session.last_watched_at)}
                     </span>
                     <ProgressBadge pct={session.progress_percent} />
