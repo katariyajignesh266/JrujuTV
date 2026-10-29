@@ -1,7 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { Eye, EyeOff, RefreshCw, Trash2, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Trash2,
+  ExternalLink,
+  Loader2,
+  CheckCircle2,
+  Play,
+  Users,
+  ChevronRight,
+} from 'lucide-react';
 import { Channel } from '@/types/content';
 import { cn } from '@/lib/cn';
 import { formatCompactNumber, formatRelativeTime } from '@/lib/formatters';
@@ -30,33 +41,70 @@ export function ChannelCard({
       <Link
         href={`/channels/${channel.id}`}
         className={cn(
-          'group flex flex-col items-center text-center p-5 rounded-3xl bg-surface-secondary border border-border/60',
-          'transition-all duration-200 hover:scale-[1.02] hover:border-brand-primary/40 hover:shadow-lg',
+          'group relative flex flex-col items-center text-center p-4 sm:p-5 rounded-3xl overflow-hidden',
+          'bg-surface-secondary/70 backdrop-blur-xl border border-border/80',
+          'hover:border-brand-primary/40 hover:shadow-xl hover:shadow-brand-primary/10 hover:-translate-y-1',
+          'active:scale-[0.98] transition-all duration-300',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary'
         )}
       >
-        <div className="relative h-24 w-24 rounded-full overflow-hidden bg-surface-elevated border-2 border-brand-primary/20 shadow-md mb-3 group-hover:border-brand-primary transition-colors">
-          {channel.thumbnail_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={channel.thumbnail_url} alt={channel.title} className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center font-bold text-2xl text-brand-primary">
-              {channel.title.charAt(0)}
-            </div>
-          )}
+        {/* Subtle decorative top glow gradient */}
+        <div className="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-brand-primary/12 via-brand-secondary/5 to-transparent pointer-events-none group-hover:from-brand-primary/20 transition-all duration-300" />
+
+        {/* Channel Avatar with layered glow and verified tick */}
+        <div className="relative mt-1 mb-3">
+          <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden bg-surface-elevated border-2 border-white/80 dark:border-white/10 shadow-md group-hover:shadow-lg group-hover:scale-105 group-hover:border-brand-primary/50 transition-all duration-300 ring-4 ring-brand-primary/10">
+            {channel.thumbnail_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={channel.thumbnail_url}
+                alt={channel.title}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center font-bold text-2xl text-brand-primary bg-brand-primary/10">
+                {channel.title.charAt(0)}
+              </div>
+            )}
+          </div>
+
+          {/* Kid-safe verified badge */}
+          <div
+            className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md ring-2 ring-surface-secondary"
+            title="Parent Verified Safe"
+          >
+            <CheckCircle2 size={13} strokeWidth={2.5} />
+          </div>
         </div>
 
-        <h3 className="font-display font-bold text-fluid-base text-content-primary line-clamp-1 w-full">
+        {/* Channel Title */}
+        <h3
+          className="font-display font-bold text-fluid-base text-content-primary line-clamp-1 w-full px-1 tracking-tight group-hover:text-brand-primary transition-colors"
+          title={channel.title}
+        >
           {channel.title}
         </h3>
 
-        <div className="flex items-center gap-1.5 text-[12px] text-content-secondary mt-1">
-          {channel.video_count > 0 && <span>{formatCompactNumber(channel.video_count)} videos</span>}
-          {channel.subscriber_count > 0 && <span>· {formatCompactNumber(channel.subscriber_count)} subs</span>}
+        {/* Stats Pills */}
+        <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-content-secondary mt-1.5 flex-wrap">
+          {channel.video_count > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-elevated border border-border/60 text-content-secondary group-hover:border-border transition-colors">
+              <Play size={10} className="fill-brand-primary/20 text-brand-primary shrink-0" />
+              <span>{formatCompactNumber(channel.video_count)} videos</span>
+            </span>
+          )}
+          {channel.subscriber_count > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-elevated border border-border/60 text-content-secondary group-hover:border-border transition-colors">
+              <Users size={10} className="text-brand-secondary shrink-0" />
+              <span>{formatCompactNumber(channel.subscriber_count)}</span>
+            </span>
+          )}
         </div>
 
-        <div className="mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-surface-elevated border border-border text-content-primary group-hover:bg-brand-primary group-hover:text-white transition-all">
-          View Channel
+        {/* View Channel Button */}
+        <div className="mt-4 w-full py-2 px-3 rounded-2xl text-xs font-bold text-content-primary bg-surface-elevated border border-border/80 group-hover:bg-gradient-to-r group-hover:from-brand-primary group-hover:to-brand-secondary group-hover:text-white group-hover:border-transparent group-hover:shadow-md group-hover:shadow-brand-primary/20 transition-all duration-200 flex items-center justify-center gap-1">
+          <span>View Channel</span>
+          <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
         </div>
       </Link>
     );
