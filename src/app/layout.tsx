@@ -4,6 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { PWAProvider } from '@/components/providers/PWAProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ChildSessionTracker } from '@/components/providers/ChildSessionTracker';
 import { DesktopHeader } from '@/components/layout/DesktopHeader';
 import { MobileHeader } from '@/components/layout/MobileHeader';
 import { BottomNavBar } from '@/components/layout/BottomNavBar';
@@ -95,6 +96,9 @@ export default function RootLayout({
           <AuthProvider>
             {/* PWA: SW registration + install prompt capture (client-only, renders nothing) */}
             <PWAProvider />
+
+            {/* Child session tracker: fires parent notification on child app open (fire-and-forget) */}
+            <ChildSessionTracker />
 
             {/* Skip to main content (a11y) */}
             <a

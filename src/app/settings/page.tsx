@@ -13,10 +13,12 @@ import {
   X,
   Tv2,
   ChevronRight,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/cn';
+import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
 
 export default function SettingsPage() {
   const { role, deleteAccount } = useAuthStore();
@@ -124,6 +126,18 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Push Notifications — parent only */}
+        {role === 'parent' && (
+          <div className="rounded-2xl bg-surface-secondary border border-border p-5 space-y-4">
+            <h2 className="font-semibold text-fluid-base text-content-primary flex items-center gap-2">
+              <Bell size={18} className="text-brand-primary" /> Notifications
+            </h2>
+            <div className="border-t border-border pt-4">
+              <PushNotificationSettings />
+            </div>
+          </div>
+        )}
 
         {/* Playback & Audio */}
         <div className="rounded-2xl bg-surface-secondary border border-border p-5 space-y-4">
