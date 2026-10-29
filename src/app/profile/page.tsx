@@ -30,6 +30,10 @@ import {
   BarChart2,
   Clock,
   ArrowLeft,
+  Sparkles,
+  Eye,
+  EyeOff,
+  Smile,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -39,6 +43,19 @@ interface ChildRecord {
   username: string;
   display_name: string;
   created_at: string;
+}
+
+// ── Avatar Gradient Palette for Children ──────────────────────────────────
+const CHILD_GRADIENTS = [
+  'from-amber-400 via-orange-500 to-rose-500 shadow-orange-500/25',
+  'from-violet-500 via-purple-600 to-fuchsia-500 shadow-purple-500/25',
+  'from-emerald-400 via-teal-500 to-cyan-500 shadow-teal-500/25',
+  'from-blue-500 via-indigo-600 to-violet-600 shadow-blue-500/25',
+  'from-pink-500 via-rose-500 to-red-500 shadow-pink-500/25',
+];
+
+function getChildGradient(index: number) {
+  return CHILD_GRADIENTS[Math.abs(index) % CHILD_GRADIENTS.length];
 }
 
 export default function ProfilePage() {
@@ -72,6 +89,7 @@ export default function ProfilePage() {
   const [childUsername, setChildUsername] = useState('');
   const [childDisplayName, setChildDisplayName] = useState('');
   const [childPin, setChildPin] = useState('');
+  const [showPinText, setShowPinText] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState<
     'idle' | 'checking' | 'available' | 'taken' | 'invalid'
   >('idle');
@@ -525,33 +543,55 @@ export default function ProfilePage() {
             MODAL: MANAGE CHILDREN
             ══════════════════════════════════════════════════════════════════ */}
         {showManageChildren && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="relative w-full max-w-md bg-surface-elevated rounded-3xl border border-border p-6 shadow-xl animate-in zoom-in-95">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Shield size={20} className="text-brand-primary" />
-                  <h3 className="font-display font-bold text-fluid-lg text-content-primary">
-                    Manage Children
-                  </h3>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+            <div className="relative w-full max-w-md bg-surface-elevated/98 backdrop-blur-2xl rounded-3xl border border-border/85 p-6 shadow-2xl animate-in zoom-in-95 overflow-hidden">
+              {/* Decorative top accent gradient */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-purple-500 to-amber-500" />
+              {/* Soft ambient glow in top-right */}
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-brand-primary/10 rounded-full blur-2xl pointer-events-none" />
+
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-5 pt-1">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-brand-primary to-brand-secondary flex items-center justify-center text-white shadow-lg shadow-brand-primary/25 shrink-0">
+                    <Shield size={20} strokeWidth={2.2} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-fluid-lg text-content-primary leading-tight">
+                        Manage Children
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
+                        {childrenList.length}
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-content-secondary mt-0.5">
+                      Profiles, PIN security & watch analytics
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowManageChildren(false)}
-                  className="text-content-secondary hover:text-content-primary rounded-full p-1"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  aria-label="Close"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
               {loadingChildren ? (
-                <div className="py-8 text-center text-content-secondary flex items-center justify-center gap-2">
-                  <Loader2 size={18} className="animate-spin" />
-                  Loading accounts…
+                <div className="py-12 text-center text-content-secondary flex flex-col items-center justify-center gap-3">
+                  <Loader2 size={24} className="animate-spin text-brand-primary" />
+                  <span className="text-fluid-sm font-semibold">Loading child accounts…</span>
                 </div>
               ) : childrenList.length === 0 ? (
-                <div className="py-8 text-center space-y-3">
-                  <p className="text-content-secondary text-fluid-sm">
-                    No child accounts created yet.
+                <div className="py-10 text-center space-y-3.5">
+                  <div className="h-16 w-16 rounded-3xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary mx-auto shadow-sm">
+                    <User size={30} />
+                  </div>
+                  <p className="text-content-secondary text-fluid-sm max-w-xs mx-auto">
+                    No child accounts yet. Add a child to set up their own safe profile with PIN protection.
                   </p>
                   <button
                     type="button"
@@ -559,21 +599,21 @@ export default function ProfilePage() {
                       setShowManageChildren(false);
                       setShowAddChild(true);
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-primary text-white text-fluid-sm font-semibold hover:opacity-90"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-brand-primary to-brand-secondary text-white text-fluid-sm font-bold shadow-lg shadow-brand-primary/25 hover:scale-[1.02] active:scale-95 transition-all"
                   >
                     <Plus size={16} />
-                    Add Child Now
+                    Create First Child Account
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-                  {childrenList.map((child) => (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-0.5">
+                  {childrenList.map((child, idx) => (
                     <div
                       key={child.id}
                       className={cn(
-                        'p-3.5 rounded-2xl bg-surface-secondary border border-border',
-                        'flex items-center gap-3',
-                        editingChildId !== child.id && 'cursor-pointer hover:bg-surface-elevated transition-colors'
+                        'group relative p-3.5 sm:p-4 rounded-2xl bg-surface-secondary/75 border border-border/80',
+                        'flex flex-col gap-2.5 transition-all duration-200',
+                        editingChildId !== child.id && 'cursor-pointer hover:bg-surface-elevated hover:border-brand-primary/40 hover:shadow-md'
                       )}
                       onClick={() => {
                         if (editingChildId === child.id) return;
@@ -583,96 +623,134 @@ export default function ProfilePage() {
                       role="button"
                       aria-label={`View progress for ${child.display_name}`}
                     >
-                      {/* Left: Name + @username */}
-                      <div className="flex-1 min-w-0">
-                        {editingChildId === child.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={editDisplayName}
-                              onChange={(e) => setEditDisplayName(e.target.value)}
-                              className="h-8 px-2 rounded-lg bg-surface-elevated border border-border text-fluid-sm text-content-primary w-full"
-                              autoFocus
-                            />
+                      {/* Top Row: Avatar + Info + Actions */}
+                      <div className="flex items-center gap-3">
+                        {/* Vibrant Kid Avatar */}
+                        <div
+                          className={cn(
+                            'h-12 w-12 rounded-2xl bg-gradient-to-tr text-white font-extrabold flex items-center justify-center text-lg shrink-0 shadow-md relative',
+                            getChildGradient(idx)
+                          )}
+                        >
+                          {child.display_name.charAt(0).toUpperCase()}
+                          <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-[9px] text-amber-500 shadow-2xs">
+                            ★
+                          </div>
+                        </div>
+
+                        {/* Left: Name + @username */}
+                        <div className="flex-1 min-w-0">
+                          {editingChildId === child.id ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                value={editDisplayName}
+                                onChange={(e) => setEditDisplayName(e.target.value)}
+                                className="h-9 px-2.5 rounded-xl bg-surface-elevated border border-border text-fluid-sm text-content-primary w-full focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEdit(child.id)}
+                                disabled={editLoading}
+                                className="h-9 w-9 rounded-xl bg-brand-primary text-white flex items-center justify-center shrink-0 active:scale-95 shadow-xs"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingChildId(null)}
+                                className="h-9 w-9 rounded-xl bg-surface-elevated border border-border text-content-secondary flex items-center justify-center shrink-0 active:scale-95"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="font-bold text-content-primary text-fluid-base truncate tracking-tight group-hover:text-brand-primary transition-colors">
+                                {child.display_name}
+                              </p>
+                              <p className="text-[11.5px] text-content-secondary font-mono truncate">
+                                @{child.username}
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Right: Edit + Delete */}
+                        {editingChildId !== child.id && (
+                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); handleSaveEdit(child.id); }}
-                              disabled={editLoading}
-                              className="p-1.5 rounded-lg bg-brand-primary text-white"
+                              onClick={() => {
+                                setEditingChildId(child.id);
+                                setEditDisplayName(child.display_name);
+                              }}
+                              className="h-8 w-8 rounded-xl flex items-center justify-center text-content-secondary hover:text-content-primary bg-surface-elevated border border-border/70 hover:border-brand-primary/40 transition-colors shadow-2xs"
+                              aria-label={`Edit ${child.display_name}`}
+                              title="Edit Name"
                             >
-                              <Check size={14} />
+                              <Edit2 size={13} />
                             </button>
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); setEditingChildId(null); }}
-                              className="p-1.5 rounded-lg bg-surface-elevated text-content-secondary"
+                              onClick={() => handleDeleteChild(child.id, child.display_name)}
+                              className="h-8 w-8 rounded-xl flex items-center justify-center text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-colors shadow-2xs"
+                              aria-label={`Delete ${child.display_name}`}
+                              title="Delete Account"
                             >
-                              <X size={14} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
-                        ) : (
-                          <>
-                            <p className="font-semibold text-content-primary text-fluid-sm truncate">
-                              {child.display_name}
-                            </p>
-                            <p className="text-[12px] text-content-secondary truncate">
-                              @{child.username}
-                            </p>
-                          </>
                         )}
                       </div>
 
-                      {/* Center: Today's watch time badge */}
+                      {/* Bottom Row: Watch time pill + Activity hint */}
                       {editingChildId !== child.id && (
-                        <div className="flex items-center gap-1 shrink-0 px-2">
-                          <Clock size={11} className="text-content-disabled" />
-                          <span className="text-[11px] font-semibold text-content-secondary">
-                            {loadingToday ? '…' : formatWatchDuration(todayMap[child.id] ?? 0)}
+                        <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[11px]">
+                          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-elevated/80 border border-border/60 text-content-secondary font-medium">
+                            <Clock size={11} className="text-brand-primary" />
+                            <span>
+                              {loadingToday
+                                ? '…'
+                                : todayMap[child.id]
+                                ? `${formatWatchDuration(todayMap[child.id])} today`
+                                : '0m watched today'}
+                            </span>
+                          </div>
+                          <span className="font-semibold text-brand-primary flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            View Activity <ChevronRight size={12} />
                           </span>
                         </div>
                       )}
-
-                      {/* Right: Edit + Delete */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        {editingChildId !== child.id && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingChildId(child.id);
-                              setEditDisplayName(child.display_name);
-                            }}
-                            className="p-2 text-content-secondary hover:text-content-primary rounded-lg transition-colors"
-                            aria-label={`Edit ${child.display_name}`}
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteChild(child.id, child.display_name);
-                          }}
-                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                          aria-label={`Delete ${child.display_name}`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
                     </div>
                   ))}
 
+                  {/* Add Another Child CTA Card */}
                   <button
                     type="button"
                     onClick={() => {
                       setShowManageChildren(false);
                       setShowAddChild(true);
                     }}
-                    className="w-full mt-3 py-2.5 rounded-xl border border-dashed border-border text-content-secondary hover:text-content-primary flex items-center justify-center gap-2 text-fluid-sm font-medium transition-colors"
+                    className="group relative w-full mt-4 p-4 rounded-2xl border-2 border-dashed border-brand-primary/30 hover:border-brand-primary/70 bg-gradient-to-r from-brand-primary/[0.04] via-purple-500/[0.04] to-brand-secondary/[0.04] hover:bg-brand-primary/[0.08] transition-all flex items-center justify-between active:scale-[0.99] shadow-xs"
                   >
-                    <Plus size={16} />
-                    Add Another Child
+                    <div className="flex items-center gap-3.5 text-left">
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-secondary text-white flex items-center justify-center shadow-md shadow-brand-primary/25 group-hover:scale-105 group-hover:rotate-3 transition-transform">
+                        <Plus size={18} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-fluid-sm text-content-primary group-hover:text-brand-primary transition-colors">
+                          Add Another Child
+                        </p>
+                        <p className="text-[11.5px] text-content-secondary">
+                          Set up PIN code, safe filters & watch limits
+                        </p>
+                      </div>
+                    </div>
+                    <div className="h-7 w-7 rounded-full bg-surface-elevated border border-border/70 flex items-center justify-center text-content-disabled group-hover:text-brand-primary group-hover:border-brand-primary/40 transition-all shadow-xs">
+                      <ChevronRight size={14} />
+                    </div>
                   </button>
                 </div>
               )}
@@ -681,52 +759,127 @@ export default function ProfilePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            MODAL: ADD CHILD
+            MODAL: ADD CHILD (Create Child Account)
             ══════════════════════════════════════════════════════════════════ */}
         {showAddChild && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="relative w-full max-w-md bg-surface-elevated rounded-3xl border border-border p-6 shadow-xl animate-in zoom-in-95">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Plus size={20} className="text-brand-primary" />
-                  <h3 className="font-display font-bold text-fluid-lg text-content-primary">
-                    Create Child Account
-                  </h3>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in">
+            <div className="relative w-full max-w-md bg-surface-elevated/98 backdrop-blur-2xl rounded-3xl border border-border/85 p-6 shadow-2xl animate-in zoom-in-95 overflow-hidden">
+              {/* Decorative top accent gradient */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-purple-500 to-amber-500" />
+              {/* Soft ambient glow in top-right */}
+              <div className="absolute -top-12 -right-12 w-36 h-36 bg-gradient-to-br from-brand-primary/15 to-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-4 pt-1">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddChild(false);
+                      setShowManageChildren(true);
+                    }}
+                    className="h-9 w-9 rounded-xl bg-surface-secondary/80 hover:bg-surface-secondary text-content-secondary hover:text-content-primary flex items-center justify-center transition-colors shadow-2xs"
+                    aria-label="Back to Manage Children"
+                    title="Back to children list"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <div>
+                    <h3 className="font-display font-bold text-fluid-lg text-content-primary leading-tight">
+                      Create Child Account
+                    </h3>
+                    <p className="text-[11.5px] text-content-secondary mt-0.5">
+                      Safe profile with 4-digit PIN security
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowAddChild(false)}
-                  className="text-content-secondary hover:text-content-primary rounded-full p-1"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  aria-label="Close"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddChild} className="space-y-4">
+              {/* Live Kid Profile Avatar Preview */}
+              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-surface-secondary/70 border border-border/75 mb-4 shadow-2xs">
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 text-white font-black text-xl flex items-center justify-center shadow-md shadow-orange-500/25 ring-2 ring-white/20 transition-all duration-300">
+                    {childDisplayName.trim() ? childDisplayName.trim().charAt(0).toUpperCase() : '★'}
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 border-2 border-surface-elevated flex items-center justify-center text-[8px] text-white font-bold">
+                    ✓
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-fluid-sm text-content-primary truncate leading-tight">
+                    {childDisplayName.trim() || 'Child Name'}
+                  </p>
+                  <p className="text-[11.5px] text-content-secondary font-mono truncate mt-0.5">
+                    @{childUsername.trim() || 'username'}
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-2.5 py-1 rounded-full shrink-0">
+                  Profile Preview
+                </span>
+              </div>
+
+              <form onSubmit={handleAddChild} className="space-y-3.5">
+                {/* Child Display Name */}
                 <div className="space-y-1.5">
-                  <label className="text-fluid-sm font-medium text-content-primary block" htmlFor="new-child-name">
+                  <label className="text-[12.5px] font-bold text-content-primary block" htmlFor="new-child-name">
                     Child Display Name
                   </label>
                   <div className="relative">
-                    <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-disabled" />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-surface-elevated border border-border/70 flex items-center justify-center text-content-secondary">
+                      <Smile size={14} className="text-amber-500" />
+                    </div>
                     <input
                       id="new-child-name"
                       type="text"
                       required
                       value={childDisplayName}
                       onChange={(e) => setChildDisplayName(e.target.value)}
-                      placeholder="e.g. Maya"
-                      className="w-full h-11 pl-10 pr-4 rounded-xl bg-surface-secondary border border-border text-fluid-sm text-content-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                      placeholder="e.g. Maya, Aarav, Jruu"
+                      className="w-full h-12 pl-12 pr-4 rounded-2xl bg-surface-secondary/75 border border-border/80 text-fluid-sm text-content-primary focus:outline-none focus:bg-surface-elevated focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all shadow-2xs font-medium"
                     />
                   </div>
                 </div>
 
+                {/* Unique Username */}
                 <div className="space-y-1.5">
-                  <label className="text-fluid-sm font-medium text-content-primary block" htmlFor="new-child-username">
-                    Unique Username
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12.5px] font-bold text-content-primary block" htmlFor="new-child-username">
+                      Unique Username
+                    </label>
+                    {/* Live status badge */}
+                    {usernameStatus === 'available' && (
+                      <span className="text-[11px] font-bold text-emerald-500 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                        <CheckCircle2 size={12} /> Available
+                      </span>
+                    )}
+                    {usernameStatus === 'taken' && (
+                      <span className="text-[11px] font-bold text-red-500 flex items-center gap-1 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                        <AlertCircle size={12} /> Already taken
+                      </span>
+                    )}
+                    {usernameStatus === 'invalid' && (
+                      <span className="text-[11px] font-medium text-red-500">
+                        3-20 letters & numbers
+                      </span>
+                    )}
+                    {usernameStatus === 'checking' && (
+                      <span className="text-[11px] text-content-secondary flex items-center gap-1">
+                        <Loader2 size={12} className="animate-spin text-brand-primary" /> Checking…
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
-                    <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-disabled" />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-surface-elevated border border-border/70 flex items-center justify-center text-content-secondary font-mono text-xs font-bold text-brand-primary">
+                      @
+                    </div>
                     <input
                       id="new-child-username"
                       type="text"
@@ -738,53 +891,54 @@ export default function ProfilePage() {
                       }}
                       placeholder="e.g. maya-star"
                       className={cn(
-                        'w-full h-11 pl-10 pr-10 rounded-xl bg-surface-secondary border text-fluid-sm text-content-primary focus:outline-none focus:ring-2',
+                        'w-full h-12 pl-12 pr-10 rounded-2xl bg-surface-secondary/75 border text-fluid-sm text-content-primary font-mono focus:outline-none focus:bg-surface-elevated focus:ring-2 transition-all shadow-2xs font-medium',
                         usernameStatus === 'taken' || usernameStatus === 'invalid'
-                          ? 'border-red-500 focus:ring-red-500'
+                          ? 'border-red-500 focus:ring-red-500/40'
                           : usernameStatus === 'available'
-                          ? 'border-emerald-500 focus:ring-emerald-500'
-                          : 'border-border focus:ring-brand-primary'
+                          ? 'border-emerald-500 focus:ring-emerald-500/40'
+                          : 'border-border/80 focus:ring-brand-primary/40 focus:border-brand-primary'
                       )}
                     />
-                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                      {usernameStatus === 'checking' && <Loader2 size={16} className="animate-spin text-content-disabled" />}
-                      {usernameStatus === 'available' && <CheckCircle2 size={16} className="text-emerald-500" />}
-                      {(usernameStatus === 'taken' || usernameStatus === 'invalid') && (
-                        <AlertCircle size={16} className="text-red-500" />
-                      )}
-                    </div>
                   </div>
-                  {usernameStatus === 'taken' && (
-                    <p className="text-[12px] text-red-500 font-medium">This username is already taken</p>
-                  )}
-                  {usernameStatus === 'invalid' && (
-                    <p className="text-[12px] text-red-500">3-20 letters, numbers, hyphens</p>
-                  )}
-                  {usernameStatus === 'available' && (
-                    <p className="text-[12px] text-emerald-500 font-medium">Username is available</p>
-                  )}
                 </div>
 
+                {/* Password / 4-Digit PIN */}
                 <div className="space-y-1.5">
-                  <label className="text-fluid-sm font-medium text-content-primary block" htmlFor="new-child-pin">
-                    Password / 4-Digit PIN
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12.5px] font-bold text-content-primary block" htmlFor="new-child-pin">
+                      Child 4-Digit PIN / Password
+                    </label>
+                    <span className="text-[11px] text-content-secondary">
+                      For child login
+                    </span>
+                  </div>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-disabled" />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-surface-elevated border border-border/70 flex items-center justify-center text-content-secondary">
+                      <Lock size={13} className="text-purple-500" />
+                    </div>
                     <input
                       id="new-child-pin"
-                      type="password"
+                      type={showPinText ? 'text' : 'password'}
                       required
                       value={childPin}
                       onChange={(e) => setChildPin(e.target.value)}
                       placeholder="••••"
-                      className="w-full h-11 pl-10 pr-4 rounded-xl bg-surface-secondary border border-border text-fluid-sm text-content-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                      className="w-full h-12 pl-12 pr-11 rounded-2xl bg-surface-secondary/75 border border-border/80 text-fluid-sm text-content-primary tracking-widest font-mono focus:outline-none focus:bg-surface-elevated focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all shadow-2xs font-semibold"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPinText((v) => !v)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg text-content-secondary hover:text-content-primary flex items-center justify-center transition-colors"
+                      aria-label={showPinText ? 'Hide PIN' : 'Show PIN'}
+                      title={showPinText ? 'Hide PIN' : 'Show PIN'}
+                    >
+                      {showPinText ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
 
                 {addChildError && (
-                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-fluid-sm text-center">
+                  <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-fluid-sm text-center">
                     {addChildError}
                   </div>
                 )}
@@ -793,11 +947,22 @@ export default function ProfilePage() {
                   type="submit"
                   disabled={addChildLoading || usernameStatus === 'taken' || usernameStatus === 'invalid'}
                   className={cn(
-                    'w-full h-11 rounded-xl font-semibold text-fluid-sm text-white bg-brand-primary',
-                    'hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60'
+                    'w-full h-12 rounded-2xl font-bold text-fluid-sm text-white mt-2',
+                    'bg-gradient-to-r from-brand-primary via-red-600 to-brand-secondary shadow-lg shadow-brand-primary/30',
+                    'hover:shadow-brand-primary/50 hover:scale-[1.01] active:scale-[0.98] transition-all disabled:opacity-60 disabled:transform-none flex items-center justify-center gap-2'
                   )}
                 >
-                  {addChildLoading ? 'Creating account…' : 'Create Child Account'}
+                  {addChildLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Creating safe account…
+                    </span>
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      Create Child Account
+                    </>
+                  )}
                 </button>
               </form>
             </div>
@@ -809,38 +974,50 @@ export default function ProfilePage() {
             Opens on card tap in Manage Children. Uses the shared ChildProgressView.
             ══════════════════════════════════════════════════════════════════ */}
         {detailChild && session && (
-          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in">
             <div
               className={cn(
-                'relative w-full sm:max-w-md bg-surface-elevated border border-border shadow-xl',
+                'relative w-full sm:max-w-md bg-surface-elevated/98 backdrop-blur-2xl border border-border/85 shadow-2xl',
                 'rounded-t-3xl sm:rounded-3xl',
-                'max-h-[92dvh] flex flex-col',
+                'max-h-[92dvh] flex flex-col overflow-hidden',
                 'animate-in slide-in-from-bottom sm:zoom-in-95 duration-200'
               )}
             >
+              {/* Decorative top accent gradient */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-primary via-purple-500 to-amber-500" />
+
               {/* Panel header */}
-              <div className="flex items-center gap-3 p-5 border-b border-border shrink-0">
+              <div className="flex items-center gap-3 p-5 pt-6 border-b border-border/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     setDetailChild(null);
                     setShowManageChildren(true);
                   }}
-                  className="p-1.5 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="p-2 rounded-xl text-content-secondary hover:text-content-primary bg-surface-secondary/70 hover:bg-surface-secondary transition-colors"
                   aria-label="Back to Manage Children"
                 >
                   <ArrowLeft size={18} />
                 </button>
+                {/* Child mini avatar */}
+                <div
+                  className={cn(
+                    'h-10 w-10 rounded-xl bg-gradient-to-tr text-white font-extrabold flex items-center justify-center text-base shrink-0 shadow-sm',
+                    getChildGradient(childrenList.findIndex((c) => c.id === detailChild.id))
+                  )}
+                >
+                  {detailChild.display_name.charAt(0).toUpperCase()}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-content-primary text-fluid-base truncate">
+                  <p className="font-bold text-content-primary text-fluid-base truncate leading-tight">
                     {detailChild.display_name}
                   </p>
-                  <p className="text-[11px] text-content-secondary">@{detailChild.username}</p>
+                  <p className="text-[11.5px] text-content-secondary font-mono">@{detailChild.username}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setDetailChild(null)}
-                  className="p-1.5 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="p-2 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
                   aria-label="Close"
                 >
                   <X size={18} />
@@ -865,28 +1042,31 @@ export default function ProfilePage() {
             child's own data — no parent-only actions.
             ══════════════════════════════════════════════════════════════════ */}
         {showMyProgress && session && role === 'child' && (
-          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in">
             <div
               className={cn(
-                'relative w-full sm:max-w-md bg-surface-elevated border border-border shadow-xl',
+                'relative w-full sm:max-w-md bg-surface-elevated/98 backdrop-blur-2xl border border-border/85 shadow-2xl',
                 'rounded-t-3xl sm:rounded-3xl',
-                'max-h-[92dvh] flex flex-col',
+                'max-h-[92dvh] flex flex-col overflow-hidden',
                 'animate-in slide-in-from-bottom sm:zoom-in-95 duration-200'
               )}
             >
+              {/* Decorative top accent gradient */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500" />
+
               {/* Panel header */}
-              <div className="flex items-center gap-3 p-5 border-b border-border shrink-0">
-                <div className="h-8 w-8 rounded-full flex items-center justify-center bg-brand-tertiary/15">
-                  <BarChart2 size={16} className="text-brand-primary" />
+              <div className="flex items-center gap-3 p-5 pt-6 border-b border-border/80 shrink-0">
+                <div className="h-10 w-10 rounded-2xl flex items-center justify-center bg-emerald-500/15 text-emerald-500 shadow-sm">
+                  <BarChart2 size={18} />
                 </div>
-                <div className="flex-1">
-                  <p className="font-bold text-content-primary text-fluid-base">Your Progress</p>
-                  <p className="text-[11px] text-content-secondary">@{resolvedChildUsername || '…'}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-content-primary text-fluid-base leading-tight">Your Progress</p>
+                  <p className="text-[11.5px] text-content-secondary font-mono truncate">@{resolvedChildUsername || '…'}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowMyProgress(false)}
-                  className="p-1.5 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+                  className="p-2 rounded-full text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
                   aria-label="Close Your Progress"
                 >
                   <X size={18} />

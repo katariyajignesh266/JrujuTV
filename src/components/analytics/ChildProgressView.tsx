@@ -76,13 +76,15 @@ function StatChip({
   loading: boolean;
 }) {
   return (
-    <div className="flex-1 p-3 rounded-2xl bg-surface-secondary border border-border text-center">
-      <Icon size={16} className="text-brand-primary mx-auto mb-1" />
-      <p className="text-[10px] text-content-secondary uppercase tracking-wide font-medium">{label}</p>
+    <div className="flex-1 p-3.5 rounded-2xl bg-surface-secondary/70 border border-border/80 text-center shadow-xs">
+      <div className="h-8 w-8 rounded-xl bg-brand-primary/10 text-brand-primary flex items-center justify-center mx-auto mb-1.5 shadow-2xs">
+        <Icon size={16} />
+      </div>
+      <p className="text-[10px] text-content-secondary uppercase tracking-wider font-bold">{label}</p>
       {loading ? (
-        <div className="h-5 w-12 mx-auto mt-1 rounded bg-surface-elevated animate-pulse" />
+        <div className="h-6 w-14 mx-auto mt-1 rounded-md bg-surface-elevated animate-pulse" />
       ) : (
-        <p className="font-bold text-content-primary text-fluid-base mt-0.5">{value}</p>
+        <p className="font-extrabold text-content-primary text-fluid-base mt-0.5 tracking-tight">{value}</p>
       )}
     </div>
   );
@@ -91,20 +93,20 @@ function StatChip({
 function ProgressBadge({ pct }: { pct: number }) {
   if (pct >= 95) {
     return (
-      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 shrink-0">
-        ✓ Done
+      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 shrink-0">
+        ✓ Completed
       </span>
     );
   }
   if (pct <= 2) {
     return (
-      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-surface-elevated text-content-disabled shrink-0">
+      <span className="text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-surface-elevated text-content-disabled border border-border/60 shrink-0">
         Just started
       </span>
     );
   }
   return (
-    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary shrink-0">
+    <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20 shrink-0">
       {pct}% watched
     </span>
   );
@@ -365,15 +367,15 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
             className="py-8"
           />
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {sessions.map((session) => (
               <button
                 key={session.id}
                 type="button"
                 onClick={() => handleHistoryItemClick(session)}
                 className={cn(
-                  'w-full flex items-start gap-3 p-2.5 rounded-2xl transition-colors text-left',
-                  'hover:bg-surface-secondary active:bg-surface-secondary/80'
+                  'w-full flex items-start gap-3 p-3 rounded-2xl transition-all duration-150 text-left',
+                  'bg-surface-secondary/50 hover:bg-surface-secondary border border-border/50 hover:border-border active:scale-[0.99] shadow-2xs'
                 )}
               >
                 {/* Thumbnail */}
