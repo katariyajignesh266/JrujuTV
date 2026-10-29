@@ -8,6 +8,7 @@ import { useUIStore } from '@/store/uiStore';
 import { createClient } from '@/lib/supabase/client';
 import { ChildProgressView } from '@/components/analytics/ChildProgressView';
 import { formatWatchDuration } from '@/lib/formatters';
+import { getChannels } from '@/lib/api/channels';
 import {
   CircleUser,
   Shield,
@@ -63,6 +64,9 @@ export default function ProfilePage() {
   // Today's watch time map: { [child_id]: seconds }
   const [todayMap, setTodayMap] = useState<Record<string, number>>({});
   const [loadingToday, setLoadingToday] = useState(false);
+
+  // Channels count state
+  const [channelsCount, setChannelsCount] = useState<number | null>(null);
 
   // Add child form state
   const [childUsername, setChildUsername] = useState('');
@@ -171,6 +175,7 @@ export default function ProfilePage() {
     if (role === 'parent') {
       fetchChildren();
       fetchTodayWatchTimes();
+      getChannels().then((data) => setChannelsCount(data.length)).catch(() => {});
     }
   }, [role, fetchChildren, fetchTodayWatchTimes]);
 
@@ -337,33 +342,97 @@ export default function ProfilePage() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <PageShell>
-      <div className="max-w-lg mx-auto pb-12">
-        {/* Avatar + name */}
-        <div className="flex flex-col items-center gap-3 py-8">
-          <div
-            className="h-24 w-24 rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-md"
-            style={{ background: role === 'parent' ? 'var(--color-brand-primary)' : 'var(--color-brand-tertiary)' }}
-            aria-hidden="true"
-          >
-            {(role === 'child' ? resolvedChildDisplayName : (user?.name || 'U')).charAt(0).toUpperCase()}
+      <div className="max-w-lg mx-auto pb-14 space-y-5">
+        {/* Avatar + Name + Summary Dashboard */}
+        <div className="relative rounded-3xl bg-surface-secondary/70 backdrop-blur-xl border border-border/80 p-6 flex flex-col items-center text-center shadow-sm overflow-hidden">
+          {/* Decorative ambient glow */}
+          <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-brand-primary/15 via-brand-secondary/5 to-transparent pointer-events-none" />
+
+          {/* Avatar with glowing ring & badge */}
+          <div className="relative mb-3.5 mt-1">
+            <div
+              className={cn(
+                'h-24 w-24 rounded-3xl flex items-center justify-center text-white text-3xl font-extrabold shadow-xl transition-transform duration-300 hover:scale-105',
+                role === 'parent'
+                  ? 'bg-gradient-to-tr from-brand-primary via-red-600 to-brand-secondary shadow-brand-primary/25 ring-4 ring-brand-primary/15'
+                  : 'bg-gradient-to-tr from-brand-tertiary to-purple-600 shadow-purple-500/25 ring-4 ring-purple-500/15'
+              )}
+            >
+              {(role === 'child' ? resolvedChildDisplayName : (user?.name || 'U')).charAt(0).toUpperCase()}
+            </div>
+
+            {/* Role indicator floating tag */}
+            <div className="absolute -bottom-1 -right-1 h-7 w-7 rounded-xl bg-surface-elevated border-2 border-surface-secondary flex items-center justify-center shadow-md">
+              {role === 'parent' ? (
+                <Shield size={14} className="text-brand-primary fill-brand-primary/20" />
+              ) : (
+                <Star size={14} className="text-amber-500 fill-amber-500" />
+              )}
+            </div>
           </div>
-          <div className="text-center">
-            <h1 className="font-display text-fluid-xl font-bold text-content-primary">
-              {role === 'child' ? resolvedChildDisplayName : (user?.name || 'Parent')}
-            </h1>
+
+          {/* User Name */}
+          <h1 className="font-display text-fluid-xl font-bold text-content-primary tracking-tight">
+            {role === 'child' ? resolvedChildDisplayName : (user?.name || 'Parent')}
+          </h1>
+
+          {/* Role Pill */}
+          <div className="flex items-center gap-2 mt-1">
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 mt-1 px-3 py-1 rounded-full text-[11px] font-semibold',
+                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs',
                 role === 'parent'
-                  ? 'bg-brand-primary/15 text-brand-primary'
-                  : 'text-white'
+                  ? 'bg-brand-primary/10 text-brand-primary border border-brand-primary/25'
+                  : 'bg-brand-tertiary/15 text-brand-tertiary border border-brand-tertiary/25'
               )}
-              style={role === 'child' ? { background: 'var(--color-brand-tertiary)' } : {}}
             >
-              {role === 'parent' ? <Shield size={12} aria-hidden="true" /> : <Star size={12} aria-hidden="true" />}
-              {role === 'parent' ? 'Parent · Admin' : 'Child Account'}
+              {role === 'parent' ? <Shield size={12} /> : <Star size={12} />}
+              <span>{role === 'parent' ? 'Parent · Administrator' : 'Child Account'}</span>
             </span>
           </div>
+
+          {/* Parent Summary Stats Row */}
+          {role === 'parent' && (
+            <div className="grid grid-cols-3 gap-2 w-full mt-6 pt-5 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManageChildren(true);
+                  setShowAddChild(false);
+                }}
+                className="p-3 rounded-2xl bg-surface-elevated/70 border border-border/60 hover:border-brand-primary/30 active:scale-95 transition-all flex flex-col items-center"
+              >
+                <span className="text-fluid-lg font-extrabold text-content-primary">
+                  {loadingChildren ? '…' : childrenList.length}
+                </span>
+                <span className="text-[11px] font-medium text-content-secondary mt-0.5">
+                  Children
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/settings/manage-channels')}
+                className="p-3 rounded-2xl bg-surface-elevated/70 border border-border/60 hover:border-brand-primary/30 active:scale-95 transition-all flex flex-col items-center"
+              >
+                <span className="text-fluid-lg font-extrabold text-content-primary">
+                  {channelsCount !== null ? channelsCount : '…'}
+                </span>
+                <span className="text-[11px] font-medium text-content-secondary mt-0.5">
+                  Channels
+                </span>
+              </button>
+
+              <div className="p-3 rounded-2xl bg-surface-elevated/70 border border-border/60 flex flex-col items-center">
+                <span className="text-fluid-lg font-extrabold text-content-primary">
+                  {loadingToday ? '…' : formatWatchDuration(Object.values(todayMap).reduce((a, b) => a + b, 0))}
+                </span>
+                <span className="text-[11px] font-medium text-content-secondary mt-0.5">
+                  Today Watch
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Menu list */}
@@ -373,7 +442,9 @@ export default function ProfilePage() {
             <ProfileSection title="Admin Controls">
               <ProfileItem
                 icon={Shield}
+                iconBg="bg-brand-primary/10 text-brand-primary"
                 label="Manage Children"
+                subtitle="Profiles, screen time & watch activity"
                 badge={childrenList.length > 0 ? `${childrenList.length}` : undefined}
                 onClick={() => {
                   setShowManageChildren(true);
@@ -382,12 +453,17 @@ export default function ProfilePage() {
               />
               <ProfileItem
                 icon={Tv2}
+                iconBg="bg-amber-500/10 text-amber-500"
                 label="Manage Channels"
+                subtitle="Curate and whitelist safe YouTube channels"
+                badge={channelsCount !== null ? `${channelsCount}` : undefined}
                 onClick={() => router.push('/settings/manage-channels')}
               />
               <ProfileItem
                 icon={Plus}
+                iconBg="bg-purple-500/10 text-purple-500"
                 label="Add Child Account"
+                subtitle="Create a safe PIN-protected profile"
                 onClick={() => {
                   setShowAddChild(true);
                   setShowManageChildren(false);
@@ -416,7 +492,9 @@ export default function ProfilePage() {
               {/* Your Progress entry */}
               <ProfileItem
                 icon={BarChart2}
+                iconBg="bg-emerald-500/10 text-emerald-500"
                 label="Your Progress"
+                subtitle="See what you've learned & watched"
                 onClick={() => setShowMyProgress(true)}
               />
             </ProfileSection>
@@ -425,7 +503,9 @@ export default function ProfilePage() {
           <ProfileSection title="Preferences">
             <ProfileItem
               icon={Settings}
+              iconBg="bg-neutral-500/10 text-content-secondary"
               label="Settings"
+              subtitle="Theme, playback & security"
               onClick={() => router.push('/settings')}
             />
           </ProfileSection>
@@ -434,6 +514,7 @@ export default function ProfilePage() {
             <ProfileItem
               icon={LogOut}
               label="Log Out"
+              subtitle="Sign out of your account on this device"
               danger
               onClick={logout}
             />
@@ -832,26 +913,30 @@ export default function ProfilePage() {
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-surface-secondary border border-border overflow-hidden">
+    <div className="rounded-3xl bg-surface-secondary/75 backdrop-blur-xl border border-border/80 overflow-hidden shadow-xs">
       {title && (
-        <p className="px-4 pt-3 pb-1 text-[11px] font-semibold text-content-disabled uppercase tracking-wider">
+        <p className="px-5 pt-4 pb-1 text-[11px] font-bold text-content-disabled uppercase tracking-wider">
           {title}
         </p>
       )}
-      <div>{children}</div>
+      <div className="divide-y divide-border/60">{children}</div>
     </div>
   );
 }
 
 function ProfileItem({
   icon: Icon,
+  iconBg = 'bg-surface-elevated text-content-secondary',
   label,
+  subtitle,
   badge,
   danger,
   onClick,
 }: {
   icon: React.ElementType;
+  iconBg?: string;
   label: string;
+  subtitle?: string;
   badge?: string;
   danger?: boolean;
   onClick?: () => void;
@@ -861,24 +946,41 @@ function ProfileItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-3 px-4 py-3.5 min-h-[52px]',
-        'border-t border-border first:border-t-0',
-        'text-left transition-colors duration-100',
-        'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary',
+        'w-full flex items-center gap-3.5 px-4 sm:px-5 py-3.5 min-h-[58px]',
+        'text-left transition-all duration-150',
+        'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary group',
         danger
-          ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20'
-          : 'text-content-primary hover:bg-surface-elevated'
+          ? 'text-red-500 hover:bg-red-500/10'
+          : 'text-content-primary hover:bg-surface-elevated/70'
       )}
     >
-      <Icon size={20} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
-      <span className="flex-1 text-fluid-sm font-medium">{label}</span>
+      <div
+        className={cn(
+          'h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 border border-border/60 shadow-xs transition-transform duration-200 group-hover:scale-105',
+          danger ? 'bg-red-500/10 text-red-500 border-red-500/20' : iconBg
+        )}
+      >
+        <Icon size={19} strokeWidth={1.85} aria-hidden="true" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-fluid-sm font-semibold truncate leading-snug">{label}</p>
+        {subtitle && (
+          <p className="text-[11.5px] text-content-secondary truncate mt-0.5">{subtitle}</p>
+        )}
+      </div>
+
       {badge && (
-        <span className="text-[10px] font-semibold text-content-disabled border border-border px-2 py-0.5 rounded-full">
+        <span className="text-[11px] font-bold text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-2.5 py-0.5 rounded-full shadow-xs">
           {badge}
         </span>
       )}
       {!badge && !danger && (
-        <ChevronRight size={16} className="text-content-disabled shrink-0" aria-hidden="true" />
+        <ChevronRight
+          size={17}
+          className="text-content-disabled group-hover:text-content-primary group-hover:translate-x-0.5 transition-all shrink-0"
+          aria-hidden="true"
+        />
       )}
     </button>
   );
