@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/layout/PageShell';
 import {
@@ -12,6 +13,7 @@ import {
   Loader2,
   X,
   Tv2,
+  MessageCircle,
   ChevronRight,
   Bell,
 } from 'lucide-react';
@@ -30,6 +32,51 @@ export default function SettingsPage() {
   const [confirmText, setConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Allow children to comment setting
+  const [allowChildComments, setAllowChildComments] = useState(true);
+  const [updatingCommentsSetting, setUpdatingCommentsSetting] = useState(false);
+
+  useEffect(() => {
+    if (role === 'parent') {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          supabase
+            .from('profiles')
+            .select('allow_child_comments')
+            .eq('id', user.id)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (data && data.allow_child_comments !== undefined) {
+                setAllowChildComments(data.allow_child_comments);
+              }
+            });
+        }
+      });
+    }
+  }, [role]);
+
+  const toggleAllowComments = async () => {
+    const nextVal = !allowChildComments;
+    setAllowChildComments(nextVal);
+    setUpdatingCommentsSetting(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ allow_child_comments: nextVal })
+          .eq('id', user.id);
+      }
+    } catch (err) {
+      console.error('Failed to update comment permission:', err);
+      setAllowChildComments(!nextVal);
+    } finally {
+      setUpdatingCommentsSetting(false);
+    }
+  };
 
   const CONFIRM_PHRASE = 'DELETE';
 

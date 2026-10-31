@@ -213,3 +213,27 @@ export async function deleteChannel(channelId: string): Promise<void> {
 
   if (error) throw error;
 }
+
+export async function updateChannelShortsSettings(
+  channelId: string,
+  shortsEnabled: boolean,
+  shortsLimit: number | null
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc('update_channel_shorts_settings', {
+    p_channel_id: channelId,
+    p_shorts_enabled: shortsEnabled,
+    p_shorts_limit: shortsLimit,
+  });
+
+  if (error) {
+    const { error: directErr } = await supabase
+      .from('channels')
+      .update({
+        shorts_enabled: shortsEnabled,
+        shorts_limit: shortsLimit,
+      })
+      .eq('id', channelId);
+    if (directErr) throw directErr;
+  }
+}

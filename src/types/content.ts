@@ -18,6 +18,10 @@ export interface Channel {
   synced_video_count?: number;
   total_video_count?: number;
   last_full_sync_at?: string | null;
+  // Shorts settings & counts (added in migration 014)
+  shorts_enabled?: boolean;
+  shorts_limit?: number | null;
+  shorts_total_count?: number;
   // UI aliases
   name?: string;
   avatarUrl?: string;

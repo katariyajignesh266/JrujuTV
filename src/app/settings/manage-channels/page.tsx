@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   CheckCircle2,
   Clock,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { ChannelPreviewCard } from '@/components/channels/ChannelPreviewCard';
@@ -29,6 +31,7 @@ import {
   toggleChannelActive,
   syncChannel,
   deleteChannel,
+  updateChannelShortsSettings,
 } from '@/lib/api/channels';
 import { Channel, ChannelPreview } from '@/types/content';
 import { cn } from '@/lib/cn';
@@ -74,6 +77,42 @@ export default function ManageChannelsPage() {
   // Delete modal state
   const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Shorts settings review nudge
+  const [showShortsNudge, setShowShortsNudge] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const reviewed = localStorage.getItem('jruju_shorts_nudge_reviewed');
+      if (!reviewed) {
+        setShowShortsNudge(true);
+      }
+    }
+  }, []);
+
+  const dismissShortsNudge = () => {
+    localStorage.setItem('jruju_shorts_nudge_reviewed', 'true');
+    setShowShortsNudge(false);
+  };
+
+  const handleUpdateShortsSettings = async (
+    channel: Channel,
+    enabled: boolean,
+    limit: number | null
+  ) => {
+    setChannels((prev) =>
+      prev.map((c) =>
+        c.id === channel.id
+          ? { ...c, shorts_enabled: enabled, shorts_limit: limit }
+          : c
+      )
+    );
+
+    try {
+      await updateChannelShortsSettings(channel.id, enabled, limit);
+    } catch (err) {
+      console.error('Failed to update channel shorts settings:', err);
+    }
+  };
 
   const loadChannelsList = useCallback(async () => {
     try {

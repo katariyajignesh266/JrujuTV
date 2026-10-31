@@ -12,7 +12,8 @@
  * To trigger a cache refresh on next deploy: bump CACHE_VERSION below.
  */
 
-const CACHE_VERSION = 'jruju-shell-v3';
+const CACHE_VERSION = 'jruju-shell-v4';
+const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
 /**
  * App shell resources pre-cached on SW install.
@@ -47,13 +48,17 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_VERSION)
+          .filter((name) => isDev || name !== CACHE_VERSION)
           .map((name) => {
             console.log(`[SW] Deleting old cache: ${name}`);
             return caches.delete(name);
           })
       )
-    )
+    ).then(() => {
+      if (isDev) {
+        return self.registration.unregister();
+      }
+    })
   );
   // Claim all open clients so the new SW takes effect without a page refresh
   self.clients.claim();
@@ -61,6 +66,11 @@ self.addEventListener('activate', (event) => {
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
+  // Never intercept or cache requests in local development
+  if (isDev) {
+    return;
+  }
+
   const { request } = event;
   const url = new URL(request.url);
 
