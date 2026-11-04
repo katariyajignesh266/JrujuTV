@@ -37,6 +37,9 @@ export function PushNotificationSettings() {
   const { permissionState, subscribing, unsubscribing, error, subscribe, unsubscribe } =
     usePushNotifications();
 
+  // Check if VAPID key is available (build-time env var)
+  const vapidKeyAvailable = !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
   // Still detecting state
   if (permissionState === 'loading') {
     return (

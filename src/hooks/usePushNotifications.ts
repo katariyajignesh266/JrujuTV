@@ -92,8 +92,19 @@ export function usePushNotifications() {
       // 2. Get service worker registration
       const reg = await navigator.serviceWorker.ready;
 
-      // 3. Get VAPID public key
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      // 3. Get VAPID public key — try build-time env first, then fetch from server
+      let vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        try {
+          const keyRes = await fetch('/api/push/vapid-public-key');
+          if (keyRes.ok) {
+            const keyData = await keyRes.json();
+            vapidPublicKey = keyData.key;
+          }
+        } catch {
+          // fetch failed — fall through to error
+        }
+      }
       if (!vapidPublicKey) {
         throw new Error('VAPID public key not configured (NEXT_PUBLIC_VAPID_PUBLIC_KEY missing)');
       }

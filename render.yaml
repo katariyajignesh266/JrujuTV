@@ -53,6 +53,14 @@ services:
       - key: YOUTUBE_API_KEY
         sync: false
 
+      # Supabase service role key (set actual value in the Render dashboard)
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # VAPID public key for Web Push notifications (set actual value in the Render dashboard)
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+
       # Keep-alive self-pinger (set to "false" to disable)
       - key: KEEP_ALIVE_ENABLED
         value: "true"
