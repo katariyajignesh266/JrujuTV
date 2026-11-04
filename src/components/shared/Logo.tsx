@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { cn } from '@/lib/cn';
 
 interface LogoProps {
@@ -16,6 +17,10 @@ const sizes = {
 
 export function Logo({ size = 'md', variant = 'full', className }: LogoProps) {
   const s = sizes[size];
+  const rawId = useId();
+  const safeId = rawId.replace(/[^a-zA-Z0-9-_]/g, '');
+  const bgId = `logo-bg-${safeId}`;
+  const dotId = `logo-dot-${safeId}`;
 
   return (
     <div className={cn('flex items-center gap-2 select-none', className)} aria-label="JruJu TV">
@@ -30,23 +35,23 @@ export function Logo({ size = 'md', variant = 'full', className }: LogoProps) {
         className="shrink-0 drop-shadow-[0_2px_6px_rgba(229,57,53,0.45)]"
       >
         <defs>
-          <linearGradient id="logo-bg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+          <linearGradient id={bgId} x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#E53935" />
             <stop offset="100%" stopColor="#C62828" />
           </linearGradient>
-          <linearGradient id="logo-dot" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={dotId} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="#FFD740" />
             <stop offset="100%" stopColor="#FF8F00" />
           </linearGradient>
         </defs>
         {/* Background rounded rect */}
-        <rect width="40" height="40" rx="11" fill="url(#logo-bg)" />
+        <rect width="40" height="40" rx="11" fill={`url(#${bgId})`} />
         {/* Inner highlight for depth */}
         <rect x="0" y="0" width="40" height="20" rx="11" fill="rgba(255,255,255,0.08)" />
         {/* Play triangle */}
         <polygon points="14,10 32,20 14,30" fill="white" opacity="0.96" />
         {/* Brand dot — golden */}
-        <circle cx="11" cy="30" r="4" fill="url(#logo-dot)" />
+        <circle cx="11" cy="30" r="4" fill={`url(#${dotId})`} />
       </svg>
 
       {variant === 'full' && (

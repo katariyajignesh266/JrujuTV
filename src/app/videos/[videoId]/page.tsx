@@ -6,12 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Share2, Check, Sparkles, Tv2, Loader2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { YouTubePlayer } from '@/components/video/YouTubePlayer';
-import { VideoCard } from '@/components/cards/VideoCard';
+import { VideoCard, VideoCardSkeleton } from '@/components/cards/VideoCard';
 import { Video } from '@/types/content';
 import { useAuthStore } from '@/store/authStore';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/cn';
-
 import { formatViewCount, formatRelativeTime, formatCompactNumber } from '@/lib/formatters';
 
 function VideoPlaybackContent({ videoId }: { videoId: string }) {
@@ -120,8 +119,6 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
     }
   };
 
-  // Only treat videoId directly as YouTube ID if it is a valid 11-char YouTube ID (e.g. dQw4w9WgXcQ).
-  // If it's a database UUID, we MUST wait for the API response to supply the video's actual youtube_video_id.
   const isDirectYtId = /^[a-zA-Z0-9_-]{11}$/.test(videoId);
   const activeYtId = video?.youtube_video_id || (isDirectYtId ? videoId : null);
 
@@ -133,187 +130,221 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
     }
   };
 
+  // Filter recommendations: exclude current playing video
+  const filteredUpNext = upNext.filter(
+    (v) => v.id !== video?.id && v.youtube_video_id !== activeYtId
+  );
+  const filteredMoreFromChannel = moreFromChannel.filter(
+    (v) => v.id !== video?.id && v.youtube_video_id !== activeYtId
+  );
+
   return (
-    <PageShell>
-      <div className="max-w-6xl mx-auto space-y-6 pb-20">
-        {/* Back navigation */}
-        <div className="flex items-center justify-between">
+    <PageShell fullWidth>
+      <div className="w-full max-w-[1720px] mx-auto pb-20">
+        {/* Top Back navigation bar */}
+        <div className="flex items-center justify-between mb-3.5">
           <button
             type="button"
             onClick={handleBack}
-            className="inline-flex items-center gap-1.5 p-2 -ml-2 rounded-2xl text-content-secondary hover:text-content-primary hover:bg-surface-secondary transition-colors"
+            className="inline-flex items-center gap-1.5 p-2 -ml-2 rounded-2xl text-content-secondary hover:text-content-primary hover:bg-neutral-900/5 dark:hover:bg-white/[0.06] transition-colors"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={19} />
             <span className="text-fluid-sm font-medium">Back</span>
           </button>
 
           <button
             type="button"
             onClick={handleShare}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary border border-border text-xs font-semibold text-content-secondary hover:text-content-primary transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary/70 border border-border/80 text-xs font-semibold text-content-secondary hover:text-content-primary transition-colors"
           >
             {copied ? <Check size={14} className="text-emerald-500" /> : <Share2 size={14} />}
             <span>{copied ? 'Link Copied!' : 'Share'}</span>
           </button>
         </div>
 
-        {/* ── 1. The Custom YouTube-Redirect-Proof Player ── */}
-        <div className="-mx-3 sm:-mx-4 md:-mx-6">
-          {activeYtId ? (
-            <YouTubePlayer
-              videoId={activeYtId}
-              title={video?.title}
-              autoplay={true}
-              childId={role === 'child' ? user?.id : undefined}
-              videoDbId={video?.id}
-              channelId={video?.channel_id || channel?.id}
-              accessToken={session?.access_token}
-              startAt={startAt}
-            />
-          ) : (
-            <div className="w-full aspect-video bg-surface-secondary flex flex-col items-center justify-center rounded-3xl border border-border overflow-hidden">
-              {notFound ? (
-                <div className="text-center p-6 space-y-3">
-                  <p className="text-content-primary font-semibold text-fluid-base">Video not found or unavailable</p>
-                  <p className="text-fluid-xs text-content-secondary max-w-sm">
-                    This video could not be loaded. It may have been removed or is temporarily unavailable.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-elevated text-xs font-semibold text-content-primary border border-border hover:bg-surface-secondary transition-colors"
-                  >
-                    <ArrowLeft size={14} />
-                    <span>Go Back</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
-                  <span className="text-fluid-xs text-content-secondary">Loading player…</span>
-                </div>
-              )}
+        {/* ── Main YouTube-Style Layout: 2 columns on xl+ (or lg+ with 68/32 split), 1 column on tablet/mobile ── */}
+        <div className="flex flex-col xl:flex-row gap-6 xl:gap-7 items-start">
+          {/* ── Left Side: Primary Player & Info ── */}
+          <div className="w-full xl:flex-1 min-w-0 space-y-4">
+            {/* Player Container */}
+            <div className="-mx-3 sm:-mx-4 md:mx-0 rounded-none md:rounded-3xl overflow-hidden shadow-sm md:shadow-xl md:border md:border-border/70 bg-black">
+              <div className="w-full max-h-[calc(100dvh-56px-70px)] aspect-video flex items-center justify-center">
+                {activeYtId ? (
+                  <YouTubePlayer
+                    videoId={activeYtId}
+                    title={video?.title}
+                    autoplay={true}
+                    childId={role === 'child' ? user?.id : undefined}
+                    videoDbId={video?.id}
+                    channelId={video?.channel_id || channel?.id}
+                    accessToken={session?.access_token}
+                    startAt={startAt}
+                  />
+                ) : (
+                  <div className="w-full h-full aspect-video bg-surface-secondary flex flex-col items-center justify-center rounded-none md:rounded-3xl overflow-hidden">
+                    {notFound ? (
+                      <div className="text-center p-6 space-y-3">
+                        <p className="text-content-primary font-semibold text-fluid-base">Video not found or unavailable</p>
+                        <p className="text-fluid-xs text-content-secondary max-w-sm">
+                          This video could not be loaded. It may have been removed or is temporarily unavailable.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleBack}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-elevated text-xs font-semibold text-content-primary border border-border hover:bg-surface-secondary transition-colors"
+                        >
+                          <ArrowLeft size={14} />
+                          <span>Go Back</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
+                        <span className="text-fluid-xs text-content-secondary">Loading player…</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* ── 2. Video Title & Channel Meta ── */}
-        {video ? (
-          <div className="space-y-4 pt-1">
-            <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
-              {video.title}
-            </h1>
+            {/* Title & Channel Information */}
+            {video ? (
+              <div className="space-y-3 pt-1">
+                <h1 className="font-display font-bold text-fluid-lg sm:text-xl md:text-2xl text-content-primary leading-snug">
+                  {video.title}
+                </h1>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl bg-surface-secondary border border-border">
-              {/* Channel Info */}
-              <Link
-                href={channel?.id ? `/channels/${channel.id}` : '#'}
-                className="flex items-center gap-3 group focus:outline-none"
-              >
-                <div className="relative h-12 w-12 rounded-full overflow-hidden bg-surface-elevated border border-border shrink-0">
-                  {channel?.thumbnail_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={channel.thumbnail_url} alt={channel.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center font-bold text-brand-primary">
-                      {channel?.title?.charAt(0) || 'C'}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl md:rounded-3xl bg-surface-secondary/70 border border-border/80">
+                  {/* Channel Info */}
+                  <Link
+                    href={channel?.id ? `/channels/${channel.id}` : '#'}
+                    className="flex items-center gap-3 group focus:outline-none"
+                  >
+                    <div className="relative h-12 w-12 rounded-full overflow-hidden bg-surface-elevated border border-border shrink-0">
+                      {channel?.thumbnail_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={channel.thumbnail_url} alt={channel.title} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center font-bold text-brand-primary">
+                          {channel?.title?.charAt(0) || 'C'}
+                        </div>
+                      )}
                     </div>
+
+                    <div>
+                      <h3 className="font-semibold text-fluid-base text-content-primary group-hover:text-brand-primary transition-colors flex items-center gap-1.5">
+                        <span>{channel?.title || video.channelName || 'Curated Channel'}</span>
+                      </h3>
+                      <p className="text-[11.5px] text-content-secondary">
+                        {channel?.subscriber_count ? `${formatCompactNumber(channel.subscriber_count)} subscribers` : 'Parent approved'}
+                      </p>
+                    </div>
+                  </Link>
+
+                  {/* Stats badge */}
+                  <div className="flex items-center gap-3 text-xs text-content-secondary pl-1 sm:pl-0">
+                    {video.view_count !== undefined && (
+                      <span>{formatViewCount(video.view_count)}</span>
+                    )}
+                    {video.published_at && (
+                      <>
+                        <span>·</span>
+                        <span>{formatRelativeTime(video.published_at)}</span>
+                      </>
+                    )}
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                      Child Safe
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (!loading && !notFound) ? (
+              <div className="space-y-4 pt-1">
+                <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
+                  Curated Video Playback
+                </h1>
+                <div className="flex items-center justify-between p-4 rounded-3xl bg-surface-secondary border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-brand-primary/10 flex items-center justify-center font-bold text-brand-primary">
+                      <Tv2 size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-fluid-base text-content-primary">Approved Content</h3>
+                      <p className="text-[11.5px] text-content-secondary">Redirect-proof child player</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                    Child Safe
+                  </span>
+                </div>
+              </div>
+            ) : loading ? (
+              <div className="space-y-3 pt-2">
+                <div className="h-6 w-3/4 rounded bg-surface-secondary animate-pulse" />
+                <div className="h-16 rounded-3xl bg-surface-secondary animate-pulse" />
+              </div>
+            ) : null}
+
+            {/* "More from this Channel" section */}
+            {filteredMoreFromChannel.length > 0 && (
+              <div className="space-y-3 pt-6 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-semibold text-fluid-lg text-content-primary flex items-center gap-2">
+                    <Tv2 size={18} className="text-brand-primary" /> More from {channel?.title || 'this channel'}
+                  </h2>
+                  {channel?.id && (
+                    <Link
+                      href={`/channels/${channel.id}`}
+                      className="text-xs font-semibold text-brand-primary hover:underline"
+                    >
+                      View all
+                    </Link>
                   )}
                 </div>
 
-                <div>
-                  <h3 className="font-semibold text-fluid-base text-content-primary group-hover:text-brand-primary transition-colors flex items-center gap-1.5">
-                    <span>{channel?.title || video.channelName || 'Curated Channel'}</span>
-                  </h3>
-                  <p className="text-[11.5px] text-content-secondary">
-                    {channel?.subscriber_count ? `${formatCompactNumber(channel.subscriber_count)} subscribers` : 'Parent approved'}
-                  </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredMoreFromChannel.slice(0, 6).map((v) => (
+                    <VideoCard key={v.id} video={v} />
+                  ))}
                 </div>
-              </Link>
+              </div>
+            )}
+          </div>
 
-              {/* Stats badge */}
-              <div className="flex items-center gap-3 text-xs text-content-secondary pl-1 sm:pl-0">
-                {video.view_count !== undefined && (
-                  <span>{formatViewCount(video.view_count)}</span>
-                )}
-                {video.published_at && (
-                  <>
-                    <span>·</span>
-                    <span>{formatRelativeTime(video.published_at)}</span>
-                  </>
-                )}
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                  Child Safe
+          {/* ── Right Side: Up Next Sticky Sidebar (fixed 380px-410px width on desktop) ── */}
+          <div className="w-full xl:w-[380px] 2xl:w-[410px] shrink-0 min-w-0">
+            <aside
+              aria-label="Recommended videos"
+              className="xl:sticky xl:top-2 space-y-3 xl:max-h-[calc(100dvh-56px-24px)] xl:overflow-y-auto xl:pr-1.5 scrollbar-hide"
+            >
+              <div className="flex items-center justify-between pb-1 border-b border-border/40">
+                <h2 className="font-semibold text-[14px] text-content-primary flex items-center gap-1.5">
+                  <Sparkles size={16} className="text-amber-500" /> Up Next
+                </h2>
+                <span className="text-[11px] font-medium text-content-secondary">
+                  Curated &amp; Safe
                 </span>
               </div>
-            </div>
-          </div>
-        ) : (!loading && !notFound) ? (
-          <div className="space-y-4 pt-1">
-            <h1 className="font-display font-bold text-fluid-lg text-content-primary leading-snug">
-              Curated Video Playback
-            </h1>
-            <div className="flex items-center justify-between p-4 rounded-3xl bg-surface-secondary border border-border">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-brand-primary/10 flex items-center justify-center font-bold text-brand-primary">
-                  <Tv2 size={20} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-fluid-base text-content-primary">Approved Content</h3>
-                  <p className="text-[11.5px] text-content-secondary">Redirect-proof child player</p>
-                </div>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                Child Safe
-              </span>
-            </div>
-          </div>
-        ) : loading ? (
-          <div className="space-y-3 pt-2">
-            <div className="h-6 w-3/4 rounded bg-surface-secondary animate-pulse" />
-            <div className="h-16 rounded-3xl bg-surface-secondary animate-pulse" />
-          </div>
-        ) : null}
 
-        {/* ── 3. More from this Channel ── */}
-        {moreFromChannel.length > 0 && (
-          <div className="space-y-3 pt-4 border-t border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-fluid-lg text-content-primary flex items-center gap-2">
-                <Tv2 size={18} className="text-brand-primary" /> More from {channel?.title || 'this channel'}
-              </h2>
-              {channel?.id && (
-                <Link
-                  href={`/channels/${channel.id}`}
-                  className="text-xs font-semibold text-brand-primary hover:underline"
-                >
-                  View all
-                </Link>
+              {loading ? (
+                <div className="space-y-2.5">
+                  <VideoCardSkeleton count={7} layout="row" />
+                </div>
+              ) : filteredUpNext.length > 0 ? (
+                <div className="space-y-2.5">
+                  {filteredUpNext.map((v) => (
+                    <VideoCard key={v.id} video={v} layout="row" />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl bg-surface-secondary/50 border border-border/60 text-center space-y-2">
+                  <p className="text-xs font-medium text-content-secondary">No other recommended videos in this category.</p>
+                </div>
               )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {moreFromChannel.map((v) => (
-                <VideoCard key={v.id} video={v} />
-              ))}
-            </div>
+            </aside>
           </div>
-        )}
-
-        {/* ── 4. Up Next / Recommendations (Interleaved) ── */}
-        {upNext.length > 0 && (
-          <div className="space-y-3 pt-6 border-t border-border">
-            <h2 className="font-semibold text-fluid-lg text-content-primary flex items-center gap-2">
-              <Sparkles size={18} className="text-amber-500" /> Up Next (Recommended)
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 gap-y-6">
-              {upNext.map((v) => (
-                <VideoCard key={v.id} video={v} />
-              ))}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </PageShell>
   );
@@ -329,8 +360,8 @@ export default function VideoPlaybackPage({
   return (
     <Suspense
       fallback={
-        <PageShell>
-          <div className="max-w-6xl mx-auto space-y-6 pb-20">
+        <PageShell fullWidth>
+          <div className="w-full max-w-[1720px] mx-auto space-y-6 pb-20">
             <div className="w-full aspect-video bg-surface-secondary animate-pulse rounded-3xl" />
           </div>
         </PageShell>

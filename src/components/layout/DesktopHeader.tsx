@@ -17,7 +17,7 @@ export function DesktopHeader() {
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 h-14',
+        'fixed top-0 left-0 right-0 z-50 h-14',
         /* Premium glass */
         'bg-white/85 dark:bg-[#090910]/95 backdrop-blur-2xl',
         /* Refined border */

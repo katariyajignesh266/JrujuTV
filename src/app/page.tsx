@@ -164,7 +164,7 @@ export default function HomePage() {
         {/* Video Card Grid — Virtualized with look-ahead pagination */}
         <section aria-label="Videos feed" className="mt-2">
           {loading ? (
-            <div className="-mx-3 sm:-mx-4 md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 sm:gap-4 gap-y-6">
+            <div className="md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 md:gap-4 lg:gap-5 gap-y-6">
               <VideoCardSkeleton count={12} />
             </div>
           ) : filteredVideos.length === 0 ? (

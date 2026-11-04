@@ -79,7 +79,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'jruju-ui',
-      partialize: (state) => ({ theme: state.theme }),
+      partialize: (state) => ({ theme: state.theme, sidebarOpen: state.sidebarOpen }),
     }
   )
 );

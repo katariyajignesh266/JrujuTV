@@ -54,23 +54,23 @@ export function VideoCard({
   const content = (
     <article
       className={cn(
-        'group flex gap-3',
-        layout === 'grid' ? 'flex-col' : 'flex-row items-start',
+        'group flex',
+        layout === 'grid' ? 'flex-col gap-3' : 'flex-row items-start gap-2.5 sm:gap-3',
         'overflow-hidden',
         'transition-all duration-300',
         'cursor-pointer w-full',
         layout === 'grid' && !isLoading && 'hover:-translate-y-0.5',
+        layout === 'row' && !isLoading && 'p-1.5 -m-1.5 rounded-2xl hover:bg-neutral-900/5 dark:hover:bg-white/[0.04]'
       )}
       aria-label={isLoading ? 'Loading video' : `Video: ${activeTitle}`}
     >
-      {/* Thumbnail Container — Strict 16:9 aspect ratio space reservation (Zero CLS) */}
+      {/* Thumbnail Container — Strict 16:9 aspect ratio */}
       <div
         className={cn(
           'relative aspect-video overflow-hidden shrink-0 bg-neutral-900 rounded-xl',
-          layout === 'row' ? 'w-44 sm:w-56 rounded-xl' : 'w-full rounded-xl',
+          layout === 'row' ? 'w-[140px] sm:w-[155px] md:w-[168px] rounded-xl' : 'w-full rounded-xl',
           isLoading && 'animate-pulse bg-[var(--color-bg-secondary)]',
-          !isLoading && 'shadow-sm group-hover:shadow-lg group-hover:shadow-black/20 dark:group-hover:shadow-black/40',
-          'transition-shadow duration-300'
+          !isLoading && 'shadow-xs group-hover:shadow-md transition-shadow duration-300'
         )}
       >
         {/* Shimmer Placeholder before image loads */}
@@ -96,8 +96,11 @@ export function VideoCard({
         {/* Hover play overlay */}
         {!isLoading && thumbLoaded && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
-            <div className="h-11 w-11 rounded-full bg-white/0 group-hover:bg-white/95 dark:group-hover:bg-white/90 flex items-center justify-center scale-0 group-hover:scale-100 transition-all duration-300 shadow-xl">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-neutral-900 translate-x-0.5">
+            <div className={cn(
+              'rounded-full bg-white/95 dark:bg-white/90 flex items-center justify-center scale-0 group-hover:scale-100 transition-all duration-300 shadow-xl',
+              layout === 'row' ? 'h-8 w-8' : 'h-11 w-11'
+            )}>
+              <svg viewBox="0 0 24 24" fill="currentColor" className={cn('text-neutral-900 translate-x-0.5', layout === 'row' ? 'w-3.5 h-3.5' : 'w-5 h-5')}>
                 <polygon points="5,3 19,12 5,21" />
               </svg>
             </div>
@@ -107,7 +110,7 @@ export function VideoCard({
         {/* Duration badge */}
         {activeDuration && !isLoading && (
           <span
-            className="absolute bottom-2 right-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-sm text-white text-[10px] font-bold tracking-wide z-10 shadow-md"
+            className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/85 backdrop-blur-xs text-white text-[9.5px] font-bold tracking-wide z-10 shadow-xs"
             aria-label={`Duration: ${activeDuration}`}
           >
             {activeDuration}
@@ -118,15 +121,15 @@ export function VideoCard({
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
       </div>
 
-      {/* Info */}
-      <div className={cn('flex gap-2.5 px-2 sm:px-0.5 min-w-0 flex-1', layout === 'row' && 'py-1')}>
-        {/* Channel avatar */}
+      {/* Info Details */}
+      <div className={cn('flex min-w-0 flex-1', layout === 'grid' ? 'gap-2.5 px-1 sm:px-0.5' : 'flex-col gap-1 py-0')}>
+        {/* Channel avatar only for grid layout */}
         {layout === 'grid' && (
           <div
             className={cn(
               'h-9 w-9 rounded-full shrink-0 overflow-hidden border border-[var(--color-border)]',
               'bg-[var(--color-bg-secondary)]',
-              'shadow-sm group-hover:shadow-md group-hover:border-red-400/40 dark:group-hover:border-red-400/30 transition-all duration-200',
+              'shadow-xs group-hover:shadow-md group-hover:border-red-400/40 dark:group-hover:border-red-400/30 transition-all duration-200',
               isLoading && 'animate-pulse'
             )}
             aria-hidden="true"
@@ -148,11 +151,12 @@ export function VideoCard({
           </div>
         )}
 
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-1">
           {/* Title */}
           <div
             className={cn(
-              'text-fluid-sm font-semibold text-[var(--color-text-primary)] leading-snug line-clamp-2',
+              'font-semibold text-[var(--color-text-primary)] leading-snug line-clamp-2',
+              layout === 'row' ? 'text-[12.5px] sm:text-[13px] leading-[1.35]' : 'text-fluid-sm',
               'group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors duration-200',
               isLoading && 'animate-pulse rounded-lg h-4 bg-[var(--color-bg-secondary)] w-full'
             )}
@@ -161,10 +165,10 @@ export function VideoCard({
           </div>
           {isLoading && <div className="animate-pulse rounded-lg h-3 bg-[var(--color-bg-secondary)] w-3/4 mt-1" />}
 
-          {/* Consistent YouTube-style Meta */}
+          {/* YouTube-style Channel & Views Meta */}
           {!isLoading ? (
             <div className="text-[11px] text-[var(--color-text-secondary)] line-clamp-1 flex flex-wrap items-center gap-1 font-medium">
-              <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeChannelName}</span>
+              <span className="truncate max-w-[130px] sm:max-w-[170px]">{activeChannelName}</span>
               {formattedViews && (
                 <>
                   <span className="opacity-40">·</span>
@@ -193,7 +197,7 @@ export function VideoCard({
   return (
     <Link
       href={`/videos/${activeVideoId}`}
-      className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 rounded-xl w-full"
+      className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 rounded-xl w-full min-w-0"
     >
       {content}
     </Link>
