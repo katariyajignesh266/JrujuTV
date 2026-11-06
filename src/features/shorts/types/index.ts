@@ -17,21 +17,6 @@ export interface ShortVideo {
   };
   channelName?: string;
   channelAvatarUrl?: string;
-  is_liked: boolean;
-  is_saved: boolean;
-  family_like_count: number;
-  family_comment_count: number;
-}
-
-export interface ShortComment {
-  id: string;
-  video_id: string;
-  user_id: string;
-  author_name: string;
-  author_role: 'parent' | 'child';
-  body: string;
-  created_at: string;
-  can_delete: boolean;
 }
 
 export interface FeedResponse {
@@ -40,4 +25,3 @@ export interface FeedResponse {
   next_cursor: number | null;
   total: number;
 }
-

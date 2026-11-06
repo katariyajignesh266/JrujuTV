@@ -1,6 +1,8 @@
+// src/components/layout/MobileHeader.tsx
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Logo } from '@/components/shared/Logo';
 import { IconButton } from '@/components/shared/IconButton';
@@ -11,7 +13,13 @@ import { MobileSearchOverlay } from '@/components/shared/SearchBar';
 import { cn } from '@/lib/cn';
 
 export function MobileHeader() {
+  const pathname = usePathname();
   const { toggleSearch } = useUIStore();
+
+  // Hide mobile header on pure full-screen Shorts route
+  if (pathname === '/shorts') {
+    return null;
+  }
 
   return (
     <>

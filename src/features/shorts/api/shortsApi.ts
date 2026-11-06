@@ -1,6 +1,6 @@
 // src/features/shorts/api/shortsApi.ts
 import { createClient } from '@/lib/supabase/client';
-import { ShortVideo, ShortComment, FeedResponse } from '../types';
+import { ShortVideo, FeedResponse } from '../types';
 
 export async function fetchShortsFeed(
   seed: number,
@@ -25,80 +25,6 @@ export async function fetchShortsFeed(
     next_cursor: data?.next_cursor ?? null,
     total: data?.total ?? 0,
   };
-}
-
-export async function toggleShortLike(videoId: string): Promise<{ liked: boolean; like_count: number }> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc('toggle_short_like', {
-    p_video_id: videoId,
-  });
-
-  if (error) {
-    console.error('Failed to toggle short like:', error);
-    throw new Error(error.message);
-  }
-
-  return data as { liked: boolean; like_count: number };
-}
-
-export async function toggleShortSave(videoId: string): Promise<{ saved: boolean }> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc('toggle_short_save', {
-    p_video_id: videoId,
-  });
-
-  if (error) {
-    console.error('Failed to toggle short save:', error);
-    throw new Error(error.message);
-  }
-
-  return data as { saved: boolean };
-}
-
-export async function fetchShortComments(videoId: string): Promise<ShortComment[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc('list_short_comments', {
-    p_video_id: videoId,
-  });
-
-  if (error) {
-    console.error('Failed to fetch short comments:', error);
-    throw new Error(error.message);
-  }
-
-  return (data as ShortComment[]) || [];
-}
-
-export async function addShortComment(
-  videoId: string,
-  body: string,
-  authorName?: string
-): Promise<ShortComment> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc('add_short_comment', {
-    p_video_id: videoId,
-    p_body: body,
-    p_author_name: authorName || '',
-  });
-
-  if (error) {
-    console.error('Failed to add short comment:', error);
-    throw new Error(error.message);
-  }
-
-  return data as ShortComment;
-}
-
-export async function deleteShortComment(commentId: string): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.rpc('delete_short_comment', {
-    p_comment_id: commentId,
-  });
-
-  if (error) {
-    console.error('Failed to delete short comment:', error);
-    throw new Error(error.message);
-  }
 }
 
 export async function recordShortProgress(
@@ -144,4 +70,3 @@ export async function updateChannelShortsSettings(
     throw new Error(error.message);
   }
 }
-

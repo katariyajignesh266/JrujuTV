@@ -429,3 +429,61 @@ select:focus-visible {
     );
   }
 }
+
+
+/* ─── Premium Shorts: Pure-Video Frame & Anti-Iframe Engine ─── */
+.shorts-container-track {
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.shorts-snap-card {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* BhaktiTube Anti-Iframe Scaling: oversized frame scaled down to render YouTube UI invisible */
+.shorts-player-frame {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 300% !important;
+  height: 300% !important;
+  min-width: 300vw !important;
+  min-height: 300vh !important;
+  transform: translate(-50%, -50%) scale(0.334) !important;
+  transform-origin: center center !important;
+  pointer-events: none !important;
+}
+
+.shorts-player-frame iframe {
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  border: none !important;
+}
+
+/* Suppress all YouTube internal overlays and controls */
+.ytp-large-play-button,
+.ytp-chrome-top,
+.ytp-chrome-bottom,
+.ytp-title,
+.ytp-channel-name,
+.ytp-watermark,
+.ytp-captions-window,
+.ytp-caption-segment,
+.caption-viewport,
+.ytp-caption-window-container,
+.ytp-gradient-top,
+.ytp-gradient-bottom,
+.ytp-youtube-button,
+.ytp-pause-overlay,
+.ytp-paid-content-overlay {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}

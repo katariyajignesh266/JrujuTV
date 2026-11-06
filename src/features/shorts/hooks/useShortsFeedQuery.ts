@@ -6,7 +6,7 @@ import { ShortVideo } from '../types';
 import { fetchShortsFeed, resetShortsHistory } from '../api/shortsApi';
 import { useShortsFeatureStore } from '../store/shortsStore';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 function isValidYouTubeId(id: string | null | undefined): boolean {
   return typeof id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(id.trim());
@@ -47,7 +47,7 @@ export function useShortsFeedQuery(initialized: boolean) {
   const [hasMore, setHasMore] = useState(true);
   const [totalEligible, setTotalEligible] = useState(0);
 
-  const { initEngagement, activeIndex } = useShortsFeatureStore();
+  const { activeIndex } = useShortsFeatureStore();
   const isFetchingRef = useRef(false);
 
   // Initial load
@@ -60,48 +60,39 @@ export function useShortsFeedQuery(initialized: boolean) {
       const res = await fetchShortsFeed(seedRef.current, 0, PAGE_SIZE);
       const cleaned = sanitizeAndDedupe(res.videos || []);
       setVideos(cleaned);
-      setHasMore(true);
+      setHasMore(res.has_more);
       cursorRef.current = res.next_cursor ?? cleaned.length;
       setTotalEligible(res.total);
-      initEngagement(cleaned);
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[ShortsFeed] Initialized with ${cleaned.length} shorts (total: ${res.total})`);
-      }
     } catch (err) {
       console.error('Error loading initial shorts feed:', err);
     } finally {
       setLoading(false);
       isFetchingRef.current = false;
     }
-  }, [initEngagement]);
+  }, []);
 
   useEffect(() => {
     loadInitialFeed();
   }, [loadInitialFeed, initialized]);
 
-  // Load next page (infinite cursor pagination with seamless reshuffle looping)
+  // Load next page: cursor pagination with automatic seed-increment cycle restart
   const loadMore = useCallback(async () => {
     if (isFetchingRef.current || loadingMore) return;
     try {
       isFetchingRef.current = true;
       setLoadingMore(true);
 
-      let currentCursor = cursorRef.current;
-      let currentSeed = seedRef.current;
+      const currentCursor = cursorRef.current;
+      const currentSeed = seedRef.current;
 
       const res = await fetchShortsFeed(currentSeed, currentCursor, PAGE_SIZE);
       let incoming = res.videos || [];
 
-      // If this seed reached the end of the database catalog, start a fresh shuffle cycle
-      if ((!res.has_more || incoming.length === 0) && cycleCountRef.current < 20) {
+      // If this cycle reached the end, restart with a new seed for an endless feed
+      if ((!res.has_more || incoming.length === 0) && cycleCountRef.current < 25) {
         cycleCountRef.current += 1;
         seedRef.current = currentSeed + 1;
         cursorRef.current = 0;
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[ShortsFeed] Library cycle completed. Reshuffling for continuous feed (cycle ${cycleCountRef.current})`);
-        }
 
         const loopRes = await fetchShortsFeed(seedRef.current, 0, PAGE_SIZE);
         incoming = loopRes.videos || [];
@@ -112,9 +103,7 @@ export function useShortsFeedQuery(initialized: boolean) {
 
       setVideos((prev) => {
         const appended = sanitizeAndDedupe(incoming, prev);
-        const nextList = [...prev, ...appended];
-        initEngagement(nextList);
-        return nextList;
+        return [...prev, ...appended];
       });
 
       setTotalEligible(res.total || 0);
@@ -124,20 +113,27 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoadingMore(false);
       isFetchingRef.current = false;
     }
-  }, [loadingMore, initEngagement]);
+  }, [loadingMore]);
 
-  // Lookahead prefetch: trigger when within 4 items from the end
+  // Lookahead prefetch: trigger when 5 items remain before reaching the end
   useEffect(() => {
-    if (videos.length > 0 && activeIndex >= videos.length - 4 && !loadingMore && !isFetchingRef.current) {
+    if (
+      videos.length > 0 &&
+      activeIndex >= videos.length - 5 &&
+      !loadingMore &&
+      !isFetchingRef.current
+    ) {
       loadMore();
     }
   }, [activeIndex, videos.length, loadingMore, loadMore]);
 
-  // Parent action: Reset seen history & replay
+  // Replay action: resets watch history in DB and restarts from cycle 0
   const handleReplayShorts = useCallback(async () => {
     try {
       setLoading(true);
       await resetShortsHistory();
+      cycleCountRef.current = 0;
+      seedRef.current = Math.floor(Math.random() * 1000000);
       await loadInitialFeed();
     } catch (err) {
       console.error('Failed to replay shorts:', err);

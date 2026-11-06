@@ -22,11 +22,13 @@ export function ShortsContainer() {
     loading,
     loadingMore,
     loadMore,
+    replayShorts,
   } = useShortsFeedQuery(initialized);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const isWheelingRef = useRef(false);
 
   const scrollToIndex = useCallback(
     (index: number) => {
@@ -50,12 +52,21 @@ export function ShortsContainer() {
     }
   }, [activeIndex, scrollToIndex]);
 
+  const handleSkipError = useCallback(
+    (index: number) => {
+      if (index === activeIndex && activeIndex < videos.length - 1) {
+        scrollToIndex(activeIndex + 1);
+      }
+    },
+    [activeIndex, videos.length, scrollToIndex]
+  );
+
   const {
     attachPlayer,
     playingIndices,
     progressMap,
     handleUserGesturePlayback,
-  } = useShortsPlayerPool(videos, handleNext);
+  } = useShortsPlayerPool(videos, handleSkipError);
 
   // 1. Primary IntersectionObserver to detect currently visible Short
   useEffect(() => {
@@ -71,9 +82,6 @@ export function ShortsContainer() {
               const index = parseInt(raw, 10);
               if (!isNaN(index) && index >= 0) {
                 setActiveIndex(index);
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`[ShortsContainer] Active short changed to index ${index}`);
-                }
               }
             }
           }
@@ -123,7 +131,7 @@ export function ShortsContainer() {
         if (Math.abs(container.scrollTop - targetTop) > 2) {
           container.scrollTo({ top: targetTop, behavior: 'smooth' });
         }
-      }, 100);
+      }, 120);
     };
 
     container.addEventListener('scroll', handleScrollSync, { passive: true });
@@ -133,7 +141,7 @@ export function ShortsContainer() {
     };
   }, [videos.length, activeIndex, setActiveIndex]);
 
-  // 3. Infinite Feed Sentinel: triggers loadMore before user reaches the bottom
+  // 3. Infinite Feed Sentinel: triggers loadMore before user reaches bottom
   useEffect(() => {
     const sentinel = sentinelRef.current;
     const container = scrollContainerRef.current;
@@ -155,13 +163,13 @@ export function ShortsContainer() {
     return () => sentinelObserver.disconnect();
   }, [loadMore]);
 
-  // 4. Desktop keyboard navigation (Arrow Up / Down)
+  // 4. Desktop keyboard navigation (Arrow Up / Arrow Down)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
         e.preventDefault();
         handleNext();
-      } else if (e.key === 'ArrowUp') {
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
         e.preventDefault();
         handlePrev();
       }
@@ -170,22 +178,50 @@ export function ShortsContainer() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNext, handlePrev]);
 
-  // Viewport calculation filling between mobile header (52px) and bottom nav (58px + safe area)
-  const containerHeightStyle = {
-    height: 'calc(100dvh - 52px - 58px - env(safe-area-inset-bottom, 0px))',
-  };
+  // 5. Desktop mouse wheel debounced navigation
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) < 30) return;
+      if (isWheelingRef.current) {
+        e.preventDefault();
+        return;
+      }
+
+      isWheelingRef.current = true;
+      e.preventDefault();
+
+      if (e.deltaY > 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+
+      setTimeout(() => {
+        isWheelingRef.current = false;
+      }, 450);
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [handleNext, handlePrev]);
 
   return (
     <main
       id="main-content"
       tabIndex={-1}
+      role="feed"
+      aria-label="Shorts video feed"
       className={cn(
         'relative w-full overflow-hidden select-none',
         'md:ml-[72px]',
         sidebarOpen && 'xl:ml-60',
-        'transition-all duration-300'
+        'transition-all duration-300',
+        // Mobile height fills between mobile top safe area and bottom nav (58px + safe area)
+        'h-[calc(100dvh-58px-env(safe-area-inset-bottom,0px))] md:h-[calc(100dvh-56px)]'
       )}
-      style={containerHeightStyle}
     >
       <div className="relative w-full h-full flex items-center justify-center mx-auto overflow-hidden">
         {loading ? (
@@ -195,16 +231,18 @@ export function ShortsContainer() {
           </div>
         ) : videos.length === 0 ? (
           <div className="flex items-center justify-center w-full h-full px-4 bg-black">
-            <ShortsEmptyState />
+            <ShortsEmptyState onReplay={replayShorts} />
           </div>
         ) : (
-          /* Main 9:16 Shorts Container */
+          /* Main 9:16 Centered Shorts Container */
           <div className="relative w-full max-w-full md:max-w-[420px] h-full flex items-center justify-center md:rounded-3xl md:overflow-hidden md:shadow-2xl md:border md:border-neutral-800 bg-black">
             {/* Vertical Scroll-Snap Track */}
             <div
               ref={scrollContainerRef}
               id="shorts-track"
-              className="relative w-full h-full overflow-y-auto bg-black select-none scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
+              tabIndex={0}
+              aria-label="Scrollable shorts track"
+              className="shorts-container-track relative w-full h-full overflow-y-auto bg-black select-none scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
               style={{
                 scrollSnapType: 'y mandatory',
                 overscrollBehaviorY: 'contain',
@@ -224,7 +262,7 @@ export function ShortsContainer() {
                     ref={(el) => {
                       itemRefs.current[index] = el;
                     }}
-                    className="relative w-full shrink-0 bg-black"
+                    className="shorts-snap-card relative w-full shrink-0 bg-black"
                     style={{
                       height: '100%',
                       scrollSnapAlign: 'start',

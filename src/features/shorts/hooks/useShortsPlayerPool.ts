@@ -13,16 +13,15 @@ declare global {
   }
 }
 
-// ── Singleton YouTube IFrame API Loader ─────────────────────────────────────────
+// ── Singleton YouTube IFrame API Script Loader ──────────────────────────────────
 let ytApiPromise: Promise<void> | null = null;
 
-function loadYouTubeIframeApi(): Promise<void> {
+export function loadYouTubeIframeApi(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   if (window.YT && window.YT.Player) return Promise.resolve();
 
   if (!ytApiPromise) {
     ytApiPromise = new Promise<void>((resolve) => {
-      // Check if tag already exists in DOM
       if (!document.getElementById('yt-iframe-api-script')) {
         const tag = document.createElement('script');
         tag.id = 'yt-iframe-api-script';
@@ -37,7 +36,6 @@ function loadYouTubeIframeApi(): Promise<void> {
         resolve();
       };
 
-      // Safety polling interval in case ready event fired prior to listener assignment
       const timer = setInterval(() => {
         if (window.YT && window.YT.Player) {
           clearInterval(timer);
@@ -61,24 +59,26 @@ export function useShortsPlayerPool(
   videos: ShortVideo[],
   onSkipError?: (index: number) => void
 ) {
-  const { isMuted, activeIndex, toggleMute } = useShortsFeatureStore();
+  const { isMuted, activeIndex, hasUserGestureUnlocked, setGestureUnlocked, toggleMute } =
+    useShortsFeatureStore();
+
   const poolRef = useRef<Map<number, PlayerPoolEntry>>(new Map());
   const [playingIndices, setPlayingIndices] = useState<Record<number, boolean>>({});
   const [progressMap, setProgressMap] = useState<Record<number, number>>({});
 
-  // Heartbeat tracking
+  // Heartbeat tracking for watch progress
   const activeVideoRef = useRef<ShortVideo | null>(null);
-  const activeDurationRef = useRef<number>(0);
-  const maxPercentRef = useRef<number>(0);
+  const activeDurationRef = useRef<number>(30);
   const watchedSecondsRef = useRef<number>(0);
+  const maxPercentRef = useRef<number>(0);
   const hasRecorded50PercentRef = useRef<boolean>(false);
 
-  // Preload YouTube API once
+  // Load YouTube API script once on mount
   useEffect(() => {
     loadYouTubeIframeApi();
   }, []);
 
-  // Flush watch progress for active video
+  // Flush watched progress when changing active video
   const flushProgress = useCallback(() => {
     const video = activeVideoRef.current;
     if (!video) return;
@@ -94,7 +94,6 @@ export function useShortsPlayerPool(
     maxPercentRef.current = 0;
   }, []);
 
-  // Update active video reference on index change
   useEffect(() => {
     flushProgress();
     const curr = videos[activeIndex];
@@ -119,11 +118,10 @@ export function useShortsPlayerPool(
     };
   }, [flushProgress]);
 
-  // Attach player for a slot container
+  // Attach a player instance to a slot container element
   const attachPlayer = useCallback(
     (index: number, containerEl: HTMLDivElement | null) => {
       if (!containerEl) {
-        // Detach container & destroy instance
         const existing = poolRef.current.get(index);
         if (existing) {
           try {
@@ -148,7 +146,6 @@ export function useShortsPlayerPool(
         return;
       }
 
-      // Destroy stale player if video changed
       if (existing) {
         try {
           existing.player?.destroy();
@@ -161,7 +158,6 @@ export function useShortsPlayerPool(
       loadYouTubeIframeApi().then(() => {
         if (!containerEl || !document.body.contains(containerEl)) return;
 
-        // Clear container and create dedicated mount div
         containerEl.innerHTML = '';
         const hostDiv = document.createElement('div');
         hostDiv.className = 'w-full h-full pointer-events-none select-none';
@@ -177,6 +173,7 @@ export function useShortsPlayerPool(
             modestbranding: 1,
             rel: 0,
             iv_load_policy: 3,
+            cc_load_policy: 3,
             playsinline: 1,
             fs: 0,
             disablekb: 1,
@@ -193,30 +190,31 @@ export function useShortsPlayerPool(
               }
 
               if (index === activeIndex) {
-                if (isMuted) {
-                  event.target.mute();
-                } else {
+                if (hasUserGestureUnlocked && !isMuted) {
                   event.target.unMute();
+                  event.target.setVolume(100);
+                } else {
+                  event.target.mute();
                 }
                 event.target.playVideo();
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`[ShortsPlayer] Slot ${index} (${video.youtube_video_id}) is READY & PLAYING`);
-                }
               } else {
+                // Preload buffering: mute and pause to cue buffer
                 event.target.mute();
-                event.target.pauseVideo();
+                try {
+                  event.target.pauseVideo();
+                } catch {
+                  // ignore
+                }
               }
             },
             onStateChange: (event: any) => {
-              // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING
               if (event.data === window.YT.PlayerState.PLAYING) {
                 setPlayingIndices((prev) => ({ ...prev, [index]: true }));
               }
             },
             onError: (event: any) => {
-              const errorCode = event.data;
               console.warn(
-                `[ShortsPlayer] YouTube error ${errorCode} on video ${video.youtube_video_id}. Auto-skipping...`
+                `[ShortsPlayer] YouTube error ${event.data} on video ${video.youtube_video_id}. Auto-advancing...`
               );
               onSkipError?.(index);
             },
@@ -231,20 +229,21 @@ export function useShortsPlayerPool(
         });
       });
     },
-    [videos, activeIndex, isMuted, onSkipError]
+    [videos, activeIndex, isMuted, hasUserGestureUnlocked, onSkipError]
   );
 
-  // Synchronize playback & audio when activeIndex or isMuted changes
+  // Synchronize playback and audio when activeIndex, isMuted or gesture unlock changes
   useEffect(() => {
     poolRef.current.forEach((entry, idx) => {
       if (!entry.isReady || !entry.player) return;
 
       try {
         if (idx === activeIndex) {
-          if (isMuted) {
-            entry.player.mute?.();
-          } else {
+          if (hasUserGestureUnlocked && !isMuted) {
             entry.player.unMute?.();
+            entry.player.setVolume?.(100);
+          } else {
+            entry.player.mute?.();
           }
           entry.player.playVideo?.();
         } else {
@@ -252,7 +251,7 @@ export function useShortsPlayerPool(
           entry.player.pauseVideo?.();
           entry.player.seekTo?.(0, true);
         }
-      } catch (e) {
+      } catch {
         // Ignore postMessage iframe timing races
       }
     });
@@ -269,25 +268,35 @@ export function useShortsPlayerPool(
         poolRef.current.delete(idx);
       }
     });
-  }, [activeIndex, isMuted]);
+  }, [activeIndex, isMuted, hasUserGestureUnlocked]);
 
-  // User gesture tap fallback to start/unmute playback
+  // Handle tap gesture anywhere on the video
   const handleUserGesturePlayback = useCallback(() => {
     const entry = poolRef.current.get(activeIndex);
-    if (entry?.player) {
-      try {
-        if (isMuted) {
-          toggleMute();
-          entry.player.unMute();
-        }
-        entry.player.playVideo();
-      } catch (e) {
-        // ignore
-      }
-    }
-  }, [activeIndex, isMuted, toggleMute]);
+    if (!entry?.player) return;
 
-  // Heartbeat timer for active video progress tracking
+    try {
+      if (!hasUserGestureUnlocked) {
+        // First tap unlocks audio for the entire session
+        setGestureUnlocked(true);
+        entry.player.unMute();
+        entry.player.setVolume(100);
+        entry.player.playVideo();
+      } else {
+        // Subsequent taps toggle play / pause
+        const state = entry.player.getPlayerState?.();
+        if (state === 1) {
+          entry.player.pauseVideo();
+        } else {
+          entry.player.playVideo();
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeIndex, hasUserGestureUnlocked, setGestureUnlocked]);
+
+  // Heartbeat progress tracking timer (1 sec)
   useEffect(() => {
     const timer = setInterval(() => {
       const activeEntry = poolRef.current.get(activeIndex);
@@ -308,7 +317,7 @@ export function useShortsPlayerPool(
             watchedSecondsRef.current += 1;
             maxPercentRef.current = Math.max(maxPercentRef.current, pct);
 
-            // Once watched reaches 50%, persist progress to database exactly once
+            // Record watch progress once >= 50%
             if (pct >= 50 && !hasRecorded50PercentRef.current) {
               hasRecorded50PercentRef.current = true;
               const video = activeVideoRef.current;

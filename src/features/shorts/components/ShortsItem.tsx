@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { Play, Loader2 } from 'lucide-react';
+import { Loader2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ShortVideo } from '../types';
 import { useShortsFeatureStore } from '../store/shortsStore';
@@ -30,9 +30,8 @@ export function ShortsItem({
   onGestureTap,
 }: ShortsItemProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { isMuted } = useShortsFeatureStore();
+  const { hasUserGestureUnlocked } = useShortsFeatureStore();
 
-  // Attach container to player pool only when in active window
   useEffect(() => {
     if (isMounted) {
       onAttachContainer(index, containerRef.current);
@@ -45,25 +44,26 @@ export function ShortsItem({
   }, [index, isMounted, onAttachContainer]);
 
   return (
-    <div
-      className="relative w-full h-full shrink-0 bg-black flex flex-col justify-between overflow-hidden select-none"
-    >
+    <div className="relative w-full h-full shrink-0 bg-black flex flex-col justify-between overflow-hidden select-none">
       {/* 1. Ambient Blurred Backdrop */}
       {video.thumbnail_url && (
         <div
-          className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-30 pointer-events-none"
+          className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-25 pointer-events-none"
           style={{ backgroundImage: `url(${video.thumbnail_url})` }}
         />
       )}
 
-      {/* 2. Scaled Player Frame (scale-[1.15] crops YouTube UI & letterboxing) */}
-      <div className="absolute inset-0 w-full h-full scale-[1.15] origin-center flex items-center justify-center pointer-events-none overflow-hidden">
+      {/* 2. Scaled Player Frame (Anti-iframe technique: renders oversized frame & scales down to crop all YouTube UI) */}
+      <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none overflow-hidden">
         {isMounted && (
-          <div ref={containerRef} className="w-full h-full pointer-events-none" />
+          <div
+            ref={containerRef}
+            className="shorts-player-frame pointer-events-none select-none"
+          />
         )}
       </div>
 
-      {/* 3. Poster Layer (Crossfades smoothly when video reaches PLAYING state) */}
+      {/* 3. Poster Layer (Crossfades smoothly as soon as video state reaches PLAYING) */}
       {video.thumbnail_url && (
         <div
           className={cn(
@@ -78,7 +78,7 @@ export function ShortsItem({
             className="w-full h-full object-cover pointer-events-none"
           />
 
-          {/* Buffering or Tap-to-play indicator while active video prepares */}
+          {/* Buffering indicator while active short initializes */}
           {isActive && !isPlaying && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
               <div className="flex flex-col items-center gap-2 text-white">
@@ -89,24 +89,25 @@ export function ShortsItem({
         </div>
       )}
 
-      {/* 4. Full-Bleed Gesture Layer (captures tap for mute/play toggle, allows vertical scroll) */}
+      {/* 4. Full-Bleed Gesture Layer: captures taps to unmute/toggle playback, allows vertical scrolling */}
       <div
         onClick={onGestureTap}
         className="absolute inset-0 z-20 cursor-pointer pointer-events-auto"
-        aria-label="Tap to toggle audio"
+        aria-label="Tap to unmute or toggle playback"
       />
 
-      {/* 5. Pure Design: Small "Shorts" Badge Top-Left */}
-      <div className="absolute top-4 left-4 z-30 pointer-events-none flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white shadow-lg">
+      {/* 5. Pure Design: Small "⚡ Shorts" Badge Top-Left */}
+      <div className="absolute top-[calc(env(safe-area-inset-top,0px)+12px)] left-4 z-30 pointer-events-none flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white shadow-lg">
         <span className="text-red-500 font-bold text-xs">⚡</span>
         <span className="text-xs font-semibold tracking-wide">Shorts</span>
       </div>
 
-      {/* 6. Muted Autoplay Indicator (Fades out when unmuted) */}
-      {isActive && isMuted && (
-        <div className="absolute top-4 right-4 z-30 pointer-events-none animate-fade-in">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-white/90 text-[11px] font-medium shadow-md">
-            <span>Tap to unmute 🔇</span>
+      {/* 6. Sound Status Indicator: shown until first user tap unlocks session sound */}
+      {isActive && !hasUserGestureUnlocked && (
+        <div className="absolute top-[calc(env(safe-area-inset-top,0px)+12px)] right-4 z-30 pointer-events-none animate-pulse">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium shadow-md">
+            <VolumeX size={13} className="text-red-400" />
+            <span>Tap for sound</span>
           </div>
         </div>
       )}
