@@ -1,5 +1,7 @@
 // src/features/shorts/types/index.ts
 
+export type ShortMediaStatus = 'pending' | 'processing' | 'ready' | 'error' | 'skipped';
+
 export interface ShortVideo {
   id: string;
   channel_id: string;
@@ -10,6 +12,9 @@ export interface ShortVideo {
   view_count: number;
   is_short: boolean;
   published_at: string | null;
+  storage_url?: string | null;
+  poster_url?: string | null;
+  media_status?: ShortMediaStatus;
   channel?: {
     id: string;
     title: string;

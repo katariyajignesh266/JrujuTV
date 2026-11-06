@@ -487,3 +487,21 @@ select:focus-visible {
   opacity: 0 !important;
   visibility: hidden !important;
 }
+
+/* ─── Shorts V2: Native Video Hardware Accelerated Rendering ─── */
+.shorts-native-video {
+  object-fit: cover !important;
+  object-position: center center !important;
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
+  transform: translateZ(0);
+}
+
+.shorts-native-video::-webkit-media-controls,
+.shorts-native-video::-webkit-media-controls-panel,
+.shorts-native-video::-webkit-media-controls-play-button,
+.shorts-native-video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+}

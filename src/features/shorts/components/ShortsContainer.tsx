@@ -1,7 +1,7 @@
 // src/features/shorts/components/ShortsContainer.tsx
 'use client';
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/authStore';
@@ -9,13 +9,25 @@ import { useUIStore } from '@/store/uiStore';
 import { useShortsFeatureStore } from '../store/shortsStore';
 import { useShortsFeedQuery } from '../hooks/useShortsFeedQuery';
 import { useShortsPlayerPool } from '../hooks/useShortsPlayerPool';
+import { useShortsV2PlayerPool } from '../hooks/useShortsV2PlayerPool';
 import { ShortsItem } from './ShortsItem';
 import { ShortsEmptyState } from './ShortsEmptyState';
+import { ShortsDebugOverlay } from './ShortsDebugOverlay';
 
 export function ShortsContainer() {
   const { initialized } = useAuthStore();
   const { sidebarOpen } = useUIStore();
   const { activeIndex, setActiveIndex } = useShortsFeatureStore();
+
+  const isV2FeatureFlag = process.env.NEXT_PUBLIC_SHORTS_V2 === 'true';
+  const [isDebugMode, setIsDebugMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      setIsDebugMode(searchParams.get('debug') === '1');
+    }
+  }, []);
 
   const {
     videos,
@@ -61,12 +73,24 @@ export function ShortsContainer() {
     [activeIndex, videos.length, scrollToIndex]
   );
 
+  // V1 YouTube IFrame Pool (Fallback)
   const {
-    attachPlayer,
-    playingIndices,
-    progressMap,
-    handleUserGesturePlayback,
+    attachPlayer: attachV1Player,
+    playingIndices: v1PlayingIndices,
+    progressMap: v1ProgressMap,
+    handleUserGesturePlayback: handleV1Gesture,
   } = useShortsPlayerPool(videos, handleSkipError);
+
+  // V2 Native Video Pool (Instant, Zero-Spinner)
+  const {
+    attachV2Container,
+    readyMap: v2ReadyMap,
+    playingMap: v2PlayingMap,
+    firstFrameMap: v2FirstFrameMap,
+    progressMap: v2ProgressMap,
+    handleUserGesturePlayback: handleV2Gesture,
+    debugInfo: v2DebugInfo,
+  } = useShortsV2PlayerPool(videos, handleSkipError);
 
   // 1. Primary IntersectionObserver to detect currently visible Short
   useEffect(() => {
@@ -223,6 +247,15 @@ export function ShortsContainer() {
         'h-[calc(100dvh-58px-env(safe-area-inset-bottom,0px))] md:h-[calc(100dvh-56px)]'
       )}
     >
+      {/* Real-Time Performance & Pool Debug Overlay (when ?debug=1) */}
+      {isDebugMode && (
+        <ShortsDebugOverlay
+          debugInfo={v2DebugInfo}
+          isV2Enabled={isV2FeatureFlag}
+          totalLoaded={videos.length}
+        />
+      )}
+
       <div className="relative w-full h-full flex items-center justify-center mx-auto overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center w-full h-full space-y-3 bg-black text-white">
@@ -252,8 +285,24 @@ export function ShortsContainer() {
               {videos.map((video, index) => {
                 const isCurrentActive = index === activeIndex;
                 const isNearActive = Math.abs(index - activeIndex) <= 1;
-                const isPlaying = !!playingIndices[index];
-                const progressPct = progressMap[index] ?? 0;
+
+                // Determine whether this item qualifies for V2 Native Video
+                const isItemV2 =
+                  isV2FeatureFlag &&
+                  !!video.storage_url &&
+                  video.media_status === 'ready';
+
+                const isPlaying = isItemV2
+                  ? !!v2PlayingMap[index]
+                  : !!v1PlayingIndices[index];
+
+                const progressPct = isItemV2
+                  ? v2ProgressMap[index] ?? 0
+                  : v1ProgressMap[index] ?? 0;
+
+                const gestureHandler = isItemV2
+                  ? handleV2Gesture
+                  : handleV1Gesture;
 
                 return (
                   <div
@@ -276,8 +325,13 @@ export function ShortsContainer() {
                       isPlaying={isPlaying}
                       isMounted={isNearActive}
                       progressPercent={progressPct}
-                      onAttachContainer={attachPlayer}
-                      onGestureTap={handleUserGesturePlayback}
+                      isV2={isItemV2}
+                      isV2Ready={!!v2ReadyMap[index]}
+                      isV2Playing={!!v2PlayingMap[index]}
+                      isV2FirstFrame={!!v2FirstFrameMap[index]}
+                      onAttachContainer={attachV1Player}
+                      onAttachV2Container={attachV2Container}
+                      onGestureTap={gestureHandler}
                     />
                   </div>
                 );

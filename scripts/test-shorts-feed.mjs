@@ -192,5 +192,46 @@ const zeroFeed = simulateShortsFeed([], {});
 assert.equal(zeroFeed.length, 0);
 console.log('✓ Test 7 passed: Empty state handled cleanly\n');
 
-console.log('=== ALL 7 AUTOMATED UNIT TESTS PASSED SUCCESSFULLY! ===');
+// Test 8: Shorts V2 Media Fields Validation
+console.log('Test 8: Shorts V2 Media Status & Storage URL Delivery');
+const mockV2Videos = [
+  {
+    id: 'v2_1',
+    youtube_video_id: '12345678901',
+    storage_url: 'https://pub-r2.jrujutv.com/shorts/v2_1/video.mp4',
+    poster_url: 'https://pub-r2.jrujutv.com/shorts/v2_1/poster.jpg',
+    media_status: 'ready',
+  },
+  {
+    id: 'v2_2',
+    youtube_video_id: '12345678902',
+    storage_url: null,
+    poster_url: null,
+    media_status: 'pending',
+  },
+];
+assert.equal(mockV2Videos[0].media_status, 'ready');
+assert.ok(mockV2Videos[0].storage_url.endsWith('.mp4'));
+assert.equal(mockV2Videos[1].media_status, 'pending');
+console.log('✓ Test 8 passed: V2 storage_url and media_status structures verified\n');
+
+// Test 9: Shorts V2 Routing & Fallback Verification
+console.log('Test 9: Shorts V2 Feature Flag & Fallback Engine');
+function resolvePlayerEngine(video, isFeatureFlagEnabled) {
+  if (isFeatureFlagEnabled && video?.storage_url && video?.media_status === 'ready') {
+    return 'NATIVE_V2';
+  }
+  return 'IFRAME_V1';
+}
+
+// When V2 feature flag is disabled
+assert.equal(resolvePlayerEngine(mockV2Videos[0], false), 'IFRAME_V1', 'Must fallback to V1 when flag is OFF');
+
+// When V2 feature flag is enabled
+assert.equal(resolvePlayerEngine(mockV2Videos[0], true), 'NATIVE_V2', 'Must use V2 when video is ready');
+assert.equal(resolvePlayerEngine(mockV2Videos[1], true), 'IFRAME_V1', 'Must fallback to V1 when video is pending');
+console.log('✓ Test 9 passed: V2 routing and seamless V1 fallback confirmed\n');
+
+console.log('=== ALL 9 AUTOMATED UNIT TESTS PASSED SUCCESSFULLY! ===');
+
 

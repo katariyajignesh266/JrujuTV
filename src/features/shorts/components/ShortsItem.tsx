@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { ShortVideo } from '../types';
 import { useShortsFeatureStore } from '../store/shortsStore';
 import { ShortsProgressBar } from './ShortsProgressBar';
+import { ShortsVideoPlayer } from './ShortsVideoPlayer';
 
 interface ShortsItemProps {
   video: ShortVideo;
@@ -15,7 +16,12 @@ interface ShortsItemProps {
   isPlaying: boolean;
   isMounted: boolean;
   progressPercent: number;
+  isV2?: boolean;
+  isV2Ready?: boolean;
+  isV2Playing?: boolean;
+  isV2FirstFrame?: boolean;
   onAttachContainer: (index: number, el: HTMLDivElement | null) => void;
+  onAttachV2Container?: (index: number, el: HTMLDivElement | null) => void;
   onGestureTap: () => void;
 }
 
@@ -26,60 +32,82 @@ export function ShortsItem({
   isPlaying,
   isMounted,
   progressPercent,
+  isV2 = false,
+  isV2Ready = false,
+  isV2Playing = false,
+  isV2FirstFrame = false,
   onAttachContainer,
+  onAttachV2Container,
   onGestureTap,
 }: ShortsItemProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const iframeContainerRef = useRef<HTMLDivElement | null>(null);
   const { hasUserGestureUnlocked } = useShortsFeatureStore();
 
+  // If V1 iframe mode, manage iframe container attachment
   useEffect(() => {
-    if (isMounted) {
-      onAttachContainer(index, containerRef.current);
-    } else {
-      onAttachContainer(index, null);
+    if (!isV2) {
+      if (isMounted) {
+        onAttachContainer(index, iframeContainerRef.current);
+      } else {
+        onAttachContainer(index, null);
+      }
+      return () => {
+        onAttachContainer(index, null);
+      };
     }
-    return () => {
-      onAttachContainer(index, null);
-    };
-  }, [index, isMounted, onAttachContainer]);
+  }, [index, isV2, isMounted, onAttachContainer]);
+
+  // Determine effective playing & poster visibility state
+  const effectivePlaying = isV2 ? isV2Playing || isV2FirstFrame : isPlaying;
+  const posterUrl = video.poster_url || video.thumbnail_url;
 
   return (
     <div className="relative w-full h-full shrink-0 bg-black flex flex-col justify-between overflow-hidden select-none">
       {/* 1. Ambient Blurred Backdrop */}
-      {video.thumbnail_url && (
+      {posterUrl && (
         <div
           className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-25 pointer-events-none"
-          style={{ backgroundImage: `url(${video.thumbnail_url})` }}
+          style={{ backgroundImage: `url(${posterUrl})` }}
         />
       )}
 
-      {/* 2. Scaled Player Frame (Anti-iframe technique: renders oversized frame & scales down to crop all YouTube UI) */}
-      <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none overflow-hidden">
-        {isMounted && (
-          <div
-            ref={containerRef}
-            className="shorts-player-frame pointer-events-none select-none"
-          />
-        )}
-      </div>
+      {/* 2. Video Player Layer */}
+      {isV2 && onAttachV2Container ? (
+        /* V2 Native HTML5 Video Player */
+        <ShortsVideoPlayer
+          index={index}
+          isActive={isActive}
+          onAttachContainer={onAttachV2Container}
+        />
+      ) : (
+        /* V1 Scaled YouTube IFrame Player */
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none overflow-hidden">
+          {isMounted && (
+            <div
+              ref={iframeContainerRef}
+              className="shorts-player-frame pointer-events-none select-none"
+            />
+          )}
+        </div>
+      )}
 
-      {/* 3. Poster Layer (Crossfades smoothly as soon as video state reaches PLAYING) */}
-      {video.thumbnail_url && (
+      {/* 3. Poster Layer (Seamless crossfade when video frame is ready) */}
+      {posterUrl && (
         <div
           className={cn(
             'absolute inset-0 z-10 transition-opacity duration-300 pointer-events-none flex items-center justify-center bg-black',
-            isPlaying ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            effectivePlaying ? 'opacity-0 pointer-events-none' : 'opacity-100'
           )}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={video.thumbnail_url}
+            src={posterUrl}
             alt={video.title || 'Shorts'}
             className="w-full h-full object-cover pointer-events-none"
           />
 
-          {/* Buffering indicator while active short initializes */}
-          {isActive && !isPlaying && (
+          {/* Buffering spinner: ONLY shown for V1 iframe fallback if delayed; V2 native video NEVER shows a spinner! */}
+          {!isV2 && isActive && !isPlaying && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
               <div className="flex flex-col items-center gap-2 text-white">
                 <Loader2 className="w-10 h-10 text-brand-primary animate-spin" />
