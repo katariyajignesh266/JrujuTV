@@ -52,14 +52,16 @@ interface PlayerPoolEntry {
   player: any;
   videoId: string;
   containerEl: HTMLDivElement;
+  hostDiv: HTMLDivElement;
   isReady: boolean;
+  isPrimed: boolean;
 }
 
 export function useShortsPlayerPool(
   videos: ShortVideo[],
   onSkipError?: (index: number) => void
 ) {
-  const { isMuted, activeIndex, hasUserGestureUnlocked, setGestureUnlocked, toggleMute } =
+  const { isMuted, activeIndex, hasUserGestureUnlocked, setGestureUnlocked } =
     useShortsFeatureStore();
 
   const poolRef = useRef<Map<number, PlayerPoolEntry>>(new Map());
@@ -72,6 +74,18 @@ export function useShortsPlayerPool(
   const watchedSecondsRef = useRef<number>(0);
   const maxPercentRef = useRef<number>(0);
   const hasRecorded50PercentRef = useRef<boolean>(false);
+
+  // Live stable references to prevent unnecessary callback invalidations
+  const videosRef = useRef<ShortVideo[]>(videos);
+  videosRef.current = videos;
+  const activeIndexRef = useRef<number>(activeIndex);
+  activeIndexRef.current = activeIndex;
+  const isMutedRef = useRef<boolean>(isMuted);
+  isMutedRef.current = isMuted;
+  const hasUserGestureUnlockedRef = useRef<boolean>(hasUserGestureUnlocked);
+  hasUserGestureUnlockedRef.current = hasUserGestureUnlocked;
+  const onSkipErrorRef = useRef(onSkipError);
+  onSkipErrorRef.current = onSkipError;
 
   // Load YouTube API script once on mount
   useEffect(() => {
@@ -118,35 +132,54 @@ export function useShortsPlayerPool(
     };
   }, [flushProgress]);
 
-  // Attach a player instance to a slot container element
+  // Programmatically pause all V1 players (mutual exclusion with V2)
+  const pauseAllV1Players = useCallback(() => {
+    poolRef.current.forEach((entry) => {
+      try {
+        entry.player?.mute?.();
+        entry.player?.pauseVideo?.();
+      } catch {
+        // ignore
+      }
+    });
+  }, []);
+
+  // Attach a player instance to a slot container element (STABLE CALLBACK)
   const attachPlayer = useCallback(
     (index: number, containerEl: HTMLDivElement | null) => {
       if (!containerEl) {
-        const existing = poolRef.current.get(index);
-        if (existing) {
-          try {
-            existing.player?.destroy();
-          } catch {
-            // ignore
+        // Only destroy if slot is outside the sliding cache window [activeIndex - 1, activeIndex + 2]
+        const currentActive = activeIndexRef.current;
+        if (index < currentActive - 1 || index > currentActive + 2) {
+          const existing = poolRef.current.get(index);
+          if (existing) {
+            try {
+              existing.player?.destroy();
+            } catch {
+              // ignore
+            }
+            poolRef.current.delete(index);
           }
-          poolRef.current.delete(index);
         }
         return;
       }
 
-      const video = videos[index];
+      const video = videosRef.current[index];
       if (!video) return;
 
       const existing = poolRef.current.get(index);
-      if (
-        existing &&
-        existing.videoId === video.youtube_video_id &&
-        existing.containerEl === containerEl
-      ) {
-        return;
-      }
-
       if (existing) {
+        if (existing.videoId === video.youtube_video_id) {
+          // Player already exists for this video. If detached, re-attach hostDiv without re-initializing!
+          if (existing.containerEl !== containerEl || !containerEl.contains(existing.hostDiv)) {
+            existing.containerEl = containerEl;
+            containerEl.innerHTML = '';
+            containerEl.appendChild(existing.hostDiv);
+          }
+          return;
+        }
+
+        // Different video assigned to this slot: tear down old player
         try {
           existing.player?.destroy();
         } catch {
@@ -158,12 +191,15 @@ export function useShortsPlayerPool(
       loadYouTubeIframeApi().then(() => {
         if (!containerEl || !document.body.contains(containerEl)) return;
 
+        // Double check if created concurrently
+        if (poolRef.current.has(index)) return;
+
         containerEl.innerHTML = '';
         const hostDiv = document.createElement('div');
         hostDiv.className = 'w-full h-full pointer-events-none select-none';
         containerEl.appendChild(hostDiv);
 
-        const isCurrentlyActive = index === activeIndex;
+        const isCurrentlyActive = index === activeIndexRef.current;
 
         const player = new window.YT.Player(hostDiv, {
           videoId: video.youtube_video_id,
@@ -189,8 +225,8 @@ export function useShortsPlayerPool(
                 entry.isReady = true;
               }
 
-              if (index === activeIndex) {
-                if (hasUserGestureUnlocked && !isMuted) {
+              if (index === activeIndexRef.current) {
+                if (hasUserGestureUnlockedRef.current && !isMutedRef.current) {
                   event.target.unMute();
                   event.target.setVolume(100);
                 } else {
@@ -198,10 +234,10 @@ export function useShortsPlayerPool(
                 }
                 event.target.playVideo();
               } else {
-                // Preload buffering: mute and pause to cue buffer
+                // Preload buffering: Mute and start buffering ahead of time
                 event.target.mute();
                 try {
-                  event.target.pauseVideo();
+                  event.target.playVideo();
                 } catch {
                   // ignore
                 }
@@ -209,14 +245,28 @@ export function useShortsPlayerPool(
             },
             onStateChange: (event: any) => {
               if (event.data === window.YT.PlayerState.PLAYING) {
-                setPlayingIndices((prev) => ({ ...prev, [index]: true }));
+                const entry = poolRef.current.get(index);
+                if (index === activeIndexRef.current) {
+                  setPlayingIndices((prev) => ({ ...prev, [index]: true }));
+                } else {
+                  // Primed upcoming video: now that first bytes/frame are buffered, pause quietly!
+                  if (entry && !entry.isPrimed) {
+                    entry.isPrimed = true;
+                    try {
+                      event.target.pauseVideo();
+                      event.target.seekTo(0, true);
+                    } catch {
+                      // ignore
+                    }
+                  }
+                }
               }
             },
             onError: (event: any) => {
               console.warn(
                 `[ShortsPlayer] YouTube error ${event.data} on video ${video.youtube_video_id}. Auto-advancing...`
               );
-              onSkipError?.(index);
+              onSkipErrorRef.current?.(index);
             },
           },
         });
@@ -225,14 +275,16 @@ export function useShortsPlayerPool(
           player,
           videoId: video.youtube_video_id,
           containerEl,
+          hostDiv,
           isReady: false,
+          isPrimed: false,
         });
       });
     },
-    [videos, activeIndex, isMuted, hasUserGestureUnlocked, onSkipError]
+    [] // Stable callback! Never changes across rerenders or activeIndex changes!
   );
 
-  // Synchronize playback and audio when activeIndex, isMuted or gesture unlock changes
+  // Synchronize playback and audio when activeIndex, isMuted, or gesture unlock changes
   useEffect(() => {
     poolRef.current.forEach((entry, idx) => {
       if (!entry.isReady || !entry.player) return;
@@ -256,8 +308,13 @@ export function useShortsPlayerPool(
       }
     });
 
-    // Prune entries outside [activeIndex - 1, activeIndex + 1] window
-    const keepSlots = new Set([activeIndex - 1, activeIndex, activeIndex + 1]);
+    // Prune entries outside [activeIndex - 1, activeIndex + 2] window
+    const keepSlots = new Set([
+      activeIndex - 1,
+      activeIndex,
+      activeIndex + 1,
+      activeIndex + 2,
+    ]);
     poolRef.current.forEach((entry, idx) => {
       if (!keepSlots.has(idx)) {
         try {
@@ -337,6 +394,7 @@ export function useShortsPlayerPool(
 
   return {
     attachPlayer,
+    pauseAllV1Players,
     playingIndices,
     progressMap,
     handleUserGesturePlayback,

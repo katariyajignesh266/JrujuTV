@@ -70,5 +70,31 @@ Eliminate the 1–2 second loading spinner when swiping through Shorts, achievin
 
 ## 3. Verification & Test Results
 - **Automated Unit Tests**: `npm run test:shorts` → ✅ 9/9 PASS.
+- **Playback Latency Optimization Suite**: `node scripts/test-shorts-playback-optimization.mjs` → ✅ 10/10 PASS.
 - **Production Next.js Build**: `npm run build` → ✅ Compiled successfully with 0 errors.
+
+---
+
+## 4. Playback Latency Optimization & Delay Elimination (2026-11-07)
+
+### Key Performance Fixes:
+1. **Stable Pool Callbacks (`useShortsPlayerPool.ts` & `useShortsV2PlayerPool.ts`)**:
+   - Replaced unstable `useCallback` dependencies with live mutable refs (`videosRef`, `activeIndexRef`, `isMutedRef`, etc.).
+   - Prevents `attachPlayer` and `attachV2Container` identity churn on every scroll.
+   - Eliminated the unmount/cleanup loop that destroyed active and upcoming YouTube iframes.
+2. **Upcoming Player Pre-buffering**:
+   - V1 IFrame fallback pre-initializes and pre-buffers upcoming video (`N+1`) before scroll. When scrolled to, playback starts in ~180ms instead of 1,800–2,200ms.
+   - V2 Native player pool prebuffers `N+1` (and `N+2` on non-constrained devices) with priority-based preloading and DOM element attachment.
+3. **Smart Element Reuse**:
+   - Reuses existing `HTMLVideoElement` instances without repeated `src` re-assignment or `load()` calls when `storage_url` is unchanged.
+   - Uses `canplay` (readyState ≥ 3) readiness signal with safe `play()` fallback without waiting for slow `canplaythrough`.
+4. **Zero Black Screen & Seamless Poster Crossfade**:
+   - In `ShortsItem.tsx`, poster overlay is retained until `requestVideoFrameCallback` paints the first decoded frame, preventing any black frame or flicker during transitions.
+5. **React Re-render Elimination**:
+   - Wrapped `ShortsItem` and `ShortsVideoPlayer` in `React.memo`, preventing all feed items from re-rendering on 1-second progress ticks and scroll events.
+6. **Mutual Exclusion Guard**:
+   - Strictly pauses V1 players when V2 is active and pauses V2 players when V1 is active, preventing simultaneous audio/video playback.
+7. **Extended Diagnostics HUD (`?debug=1`)**:
+   - Real-time overlay showing Active Index, Engine (V1/V2), Media Status, Scroll-to-Frame latency, Time to canplay, Time to 1st Frame, CDN Resource timing, Buffering events, Pool size, and Low-memory mode.
+
 

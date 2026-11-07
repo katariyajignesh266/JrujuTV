@@ -1,7 +1,7 @@
 // src/features/shorts/components/ShortsVideoPlayer.tsx
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 
 interface ShortsVideoPlayerProps {
   index: number;
@@ -9,7 +9,7 @@ interface ShortsVideoPlayerProps {
   onAttachContainer: (index: number, el: HTMLDivElement | null) => void;
 }
 
-export function ShortsVideoPlayer({
+export const ShortsVideoPlayer = memo(function ShortsVideoPlayer({
   index,
   isActive,
   onAttachContainer,
@@ -31,5 +31,4 @@ export function ShortsVideoPlayer({
       className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none overflow-hidden select-none bg-black"
     />
   );
-}
-
+});

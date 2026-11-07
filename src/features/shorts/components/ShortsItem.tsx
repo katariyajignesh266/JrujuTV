@@ -1,7 +1,7 @@
 // src/features/shorts/components/ShortsItem.tsx
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import { Loader2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ShortVideo } from '../types';
@@ -25,7 +25,7 @@ interface ShortsItemProps {
   onGestureTap: () => void;
 }
 
-export function ShortsItem({
+export const ShortsItem = memo(function ShortsItem({
   video,
   index,
   isActive,
@@ -57,9 +57,12 @@ export function ShortsItem({
     }
   }, [index, isV2, isMounted, onAttachContainer]);
 
-  // Determine effective playing & poster visibility state
-  const effectivePlaying = isV2 ? isV2Playing || isV2FirstFrame : isPlaying;
+  // Determine effective playing & poster visibility state:
+  // For V2: remove poster ONLY when the first frame is painted on screen to prevent black flashes!
+  // For V1: remove poster when player starts playing.
+  const effectivePlaying = isV2 ? isV2FirstFrame : isPlaying;
   const posterUrl = video.poster_url || video.thumbnail_url;
+  const isBuffering = isActive && !effectivePlaying;
 
   return (
     <div className="relative w-full h-full shrink-0 bg-black flex flex-col justify-between overflow-hidden select-none">
@@ -91,7 +94,7 @@ export function ShortsItem({
         </div>
       )}
 
-      {/* 3. Poster Layer (Seamless crossfade when video frame is ready) */}
+      {/* 3. Poster Layer (Seamless crossfade when video frame is ready — zero black flash) */}
       {posterUrl && (
         <div
           className={cn(
@@ -106,8 +109,8 @@ export function ShortsItem({
             className="w-full h-full object-cover pointer-events-none"
           />
 
-          {/* Buffering spinner: ONLY shown for V1 iframe fallback if delayed; V2 native video NEVER shows a spinner! */}
-          {!isV2 && isActive && !isPlaying && (
+          {/* Buffering indicator: shown while active video is loading / preparing first frame */}
+          {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
               <div className="flex flex-col items-center gap-2 text-white">
                 <Loader2 className="w-10 h-10 text-brand-primary animate-spin" />
@@ -144,4 +147,4 @@ export function ShortsItem({
       <ShortsProgressBar progressPercent={progressPercent} />
     </div>
   );
-}
+});

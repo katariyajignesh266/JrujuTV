@@ -76,6 +76,7 @@ export function ShortsContainer() {
   // V1 YouTube IFrame Pool (Fallback)
   const {
     attachPlayer: attachV1Player,
+    pauseAllV1Players,
     playingIndices: v1PlayingIndices,
     progressMap: v1ProgressMap,
     handleUserGesturePlayback: handleV1Gesture,
@@ -84,6 +85,7 @@ export function ShortsContainer() {
   // V2 Native Video Pool (Instant, Zero-Spinner)
   const {
     attachV2Container,
+    pauseAllV2Videos,
     readyMap: v2ReadyMap,
     playingMap: v2PlayingMap,
     firstFrameMap: v2FirstFrameMap,
@@ -91,6 +93,22 @@ export function ShortsContainer() {
     handleUserGesturePlayback: handleV2Gesture,
     debugInfo: v2DebugInfo,
   } = useShortsV2PlayerPool(videos, handleSkipError);
+
+  // Determine active item engine
+  const currentVideo = videos[activeIndex];
+  const isCurrentActiveV2 =
+    isV2FeatureFlag &&
+    !!currentVideo?.storage_url &&
+    currentVideo?.media_status === 'ready';
+
+  // Mutual exclusion: ensure V1 and V2 never play simultaneously
+  useEffect(() => {
+    if (isCurrentActiveV2) {
+      pauseAllV1Players();
+    } else {
+      pauseAllV2Videos();
+    }
+  }, [activeIndex, isCurrentActiveV2, pauseAllV1Players, pauseAllV2Videos]);
 
   // 1. Primary IntersectionObserver to detect currently visible Short
   useEffect(() => {
@@ -252,6 +270,8 @@ export function ShortsContainer() {
         <ShortsDebugOverlay
           debugInfo={v2DebugInfo}
           isV2Enabled={isV2FeatureFlag}
+          activeEngine={isCurrentActiveV2 ? 'V2 (Native R2/CDN)' : 'V1 (YouTube IFrame)'}
+          currentMediaStatus={currentVideo?.media_status || 'none'}
           totalLoaded={videos.length}
         />
       )}
@@ -284,7 +304,8 @@ export function ShortsContainer() {
             >
               {videos.map((video, index) => {
                 const isCurrentActive = index === activeIndex;
-                const isNearActive = Math.abs(index - activeIndex) <= 1;
+                // Mount sliding window [activeIndex - 1, activeIndex, activeIndex + 1, activeIndex + 2] for smooth preloading
+                const isNearActive = index >= activeIndex - 1 && index <= activeIndex + 2;
 
                 // Determine whether this item qualifies for V2 Native Video
                 const isItemV2 =

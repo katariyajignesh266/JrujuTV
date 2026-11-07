@@ -6,14 +6,20 @@ import { useShortsFeatureStore } from '../store/shortsStore';
 import { recordShortProgress } from '../api/shortsApi';
 import { ShortVideo } from '../types';
 
+export type V2PlaybackStatus = 'IDLE' | 'LOADING' | 'READY' | 'PLAYING' | 'PAUSED';
+
 export interface V2PoolItemState {
   index: number;
   videoId: string;
   storageUrl: string;
+  status: V2PlaybackStatus;
   isReady: boolean;
   isPlaying: boolean;
   firstFrameRendered: boolean;
   firstFrameLatencyMs: number | null;
+  timeToCanplayMs: number | null;
+  cdnDownloadTimingMs: number | null;
+  bufferingEvents: number;
 }
 
 export interface V2PoolDebugInfo {
@@ -21,8 +27,14 @@ export interface V2PoolDebugInfo {
   poolSize: number;
   slots: Record<number, string>; // index -> state name
   lastLatencyMs: number | null;
+  timeToCanplayMs: number | null;
+  timeToFirstFrameMs: number | null;
+  cdnTimingMs: number | null;
+  bufferingEvents: number;
   spinnerCount: number;
   lowMemoryMode: boolean;
+  nextPreloadState: string;
+  secondNextPreloadState: string;
 }
 
 export function useShortsV2PlayerPool(
@@ -41,8 +53,14 @@ export function useShortsV2PlayerPool(
     poolSize: 0,
     slots: {},
     lastLatencyMs: null,
+    timeToCanplayMs: null,
+    timeToFirstFrameMs: null,
+    cdnTimingMs: null,
+    bufferingEvents: 0,
     spinnerCount: 0,
     lowMemoryMode: false,
+    nextPreloadState: 'IDLE',
+    secondNextPreloadState: 'IDLE',
   });
 
   // Pool holding initialized HTMLVideoElement instances: index -> element
@@ -50,8 +68,9 @@ export function useShortsV2PlayerPool(
   const elementStatesRef = useRef<Map<number, V2PoolItemState>>(new Map());
   const hostContainersRef = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  // Latency tracking
+  // Latency & performance tracking
   const scrollStartTimesRef = useRef<Map<number, number>>(new Map());
+  const loadStartTimesRef = useRef<Map<number, number>>(new Map());
   const spinnerCountRef = useRef(0);
 
   // Watch progress tracking
@@ -60,7 +79,19 @@ export function useShortsV2PlayerPool(
   const maxPercentRef = useRef(0);
   const hasRecorded50PercentRef = useRef(false);
 
-  // Low-memory detection (devices < 2GB RAM or 2G connections)
+  // Keep live references for stable callbacks
+  const videosRef = useRef<ShortVideo[]>(videos);
+  videosRef.current = videos;
+  const activeIndexRef = useRef<number>(activeIndex);
+  activeIndexRef.current = activeIndex;
+  const isMutedRef = useRef<boolean>(isMuted);
+  isMutedRef.current = isMuted;
+  const hasUserGestureUnlockedRef = useRef<boolean>(hasUserGestureUnlocked);
+  hasUserGestureUnlockedRef.current = hasUserGestureUnlocked;
+  const onSkipErrorRef = useRef(onSkipError);
+  onSkipErrorRef.current = onSkipError;
+
+  // Low-memory detection (devices < 2GB RAM or 2G / saveData connections)
   const isLowMemoryDevice = useCallback(() => {
     if (typeof window === 'undefined') return false;
     const nav = window.navigator as any;
@@ -70,7 +101,7 @@ export function useShortsV2PlayerPool(
     return false;
   }, []);
 
-  // Flush watch progress
+  // Flush watch progress to database
   const flushProgress = useCallback(() => {
     const video = activeVideoRef.current;
     if (!video) return;
@@ -108,87 +139,212 @@ export function useShortsV2PlayerPool(
       }
       videoElementsRef.current.delete(index);
       elementStatesRef.current.delete(index);
+      loadStartTimesRef.current.delete(index);
+      setReadyMap((prev) => {
+        if (!prev[index]) return prev;
+        const copy = { ...prev };
+        delete copy[index];
+        return copy;
+      });
+      setPlayingMap((prev) => {
+        if (!prev[index]) return prev;
+        const copy = { ...prev };
+        delete copy[index];
+        return copy;
+      });
+      setFirstFrameMap((prev) => {
+        if (!prev[index]) return prev;
+        const copy = { ...prev };
+        delete copy[index];
+        return copy;
+      });
     }
   }, []);
 
-  // Create & prebuffer a native HTML5 video element
-  const prepareVideoElement = useCallback(
-    (index: number, video: ShortVideo) => {
-      if (!video?.storage_url) return null;
-      if (videoElementsRef.current.has(index)) {
-        return videoElementsRef.current.get(index)!;
+  // Safely play an element with proper autoplay error handling
+  const safePlayVideo = useCallback((el: HTMLVideoElement) => {
+    try {
+      if (hasUserGestureUnlockedRef.current && !isMutedRef.current) {
+        el.muted = false;
+        el.volume = 1.0;
+      } else {
+        el.muted = true;
       }
 
-      const el = document.createElement('video');
-      el.src = video.storage_url;
-      el.preload = 'auto';
-      el.muted = true;
-      el.playsInline = true;
-      el.setAttribute('playsinline', 'true');
-      el.setAttribute('webkit-playsinline', 'true');
-      el.loop = true;
-      el.className =
-        'shorts-native-video absolute inset-0 w-full h-full object-cover pointer-events-none select-none';
+      const promise = el.play();
+      if (promise !== undefined) {
+        promise.catch((err) => {
+          // Autoplay policy blocked unmuted playback -> fall back to muted
+          if (err.name === 'NotAllowedError') {
+            el.muted = true;
+            el.play().catch(() => {});
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
-      const state: V2PoolItemState = {
+  // Create, prepare & prebuffer a native HTML5 video element
+  const prepareVideoElement = useCallback(
+    (index: number, video: ShortVideo, priority: 'active' | 'preload' = 'preload') => {
+      if (!video?.storage_url) return null;
+
+      let el = videoElementsRef.current.get(index);
+      let state = elementStatesRef.current.get(index);
+
+      if (el) {
+        // Reuse existing HTMLVideoElement; avoid re-assigning src or calling load() if unchanged
+        if (el.getAttribute('data-src') === video.storage_url) {
+          if (priority === 'active' && el.paused && (state?.isReady || el.readyState >= 3)) {
+            safePlayVideo(el);
+          }
+          return el;
+        }
+      } else {
+        el = document.createElement('video');
+        el.playsInline = true;
+        el.setAttribute('playsinline', 'true');
+        el.setAttribute('webkit-playsinline', 'true');
+        el.loop = true;
+        el.className =
+          'shorts-native-video absolute inset-0 w-full h-full object-cover pointer-events-none select-none';
+
+        videoElementsRef.current.set(index, el);
+      }
+
+      el.setAttribute('data-src', video.storage_url);
+      el.src = video.storage_url;
+      el.preload = priority === 'active' || priority === 'preload' ? 'auto' : 'metadata';
+      el.muted = true;
+
+      state = {
         index,
         videoId: video.id,
         storageUrl: video.storage_url,
+        status: 'LOADING',
         isReady: false,
         isPlaying: false,
         firstFrameRendered: false,
         firstFrameLatencyMs: null,
+        timeToCanplayMs: null,
+        cdnDownloadTimingMs: null,
+        bufferingEvents: 0,
       };
-
       elementStatesRef.current.set(index, state);
 
-      const onCanPlay = () => {
-        state.isReady = true;
+      loadStartTimesRef.current.set(index, performance.now());
+
+      const handleCanPlay = () => {
+        const currState = elementStatesRef.current.get(index);
+        if (currState) {
+          currState.isReady = true;
+          currState.status = 'READY';
+          const startTime = loadStartTimesRef.current.get(index);
+          if (startTime && currState.timeToCanplayMs === null) {
+            currState.timeToCanplayMs = Math.round(performance.now() - startTime);
+          }
+
+          // Measure CDN resource download duration via Resource Timing API
+          try {
+            if (typeof performance !== 'undefined' && performance.getEntriesByName) {
+              const entries = performance.getEntriesByName(video.storage_url!);
+              if (entries.length > 0) {
+                const resEntry = entries[entries.length - 1] as PerformanceResourceTiming;
+                currState.cdnDownloadTimingMs = Math.round(resEntry.duration);
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
         setReadyMap((prev) => ({ ...prev, [index]: true }));
+
+        // If this slot is the currently active short, start playing immediately!
+        if (index === activeIndexRef.current && el?.paused) {
+          safePlayVideo(el);
+        }
       };
 
-      const onPlaying = () => {
-        state.isPlaying = true;
+      const handlePlaying = () => {
+        const currState = elementStatesRef.current.get(index);
+        if (currState) {
+          currState.isPlaying = true;
+          currState.status = 'PLAYING';
+        }
         setPlayingMap((prev) => ({ ...prev, [index]: true }));
 
-        // Detect first frame painted
-        if ('requestVideoFrameCallback' in el) {
+        // Detect first frame painted via requestVideoFrameCallback
+        if ('requestVideoFrameCallback' in el!) {
           (el as any).requestVideoFrameCallback(() => {
-            state.firstFrameRendered = true;
-            setFirstFrameMap((prev) => ({ ...prev, [index]: true }));
-
-            const startTime = scrollStartTimesRef.current.get(index);
-            if (startTime) {
-              const latency = Math.round(performance.now() - startTime);
-              state.firstFrameLatencyMs = latency;
+            if (currState) {
+              currState.firstFrameRendered = true;
+              const scrollStart = scrollStartTimesRef.current.get(index);
+              if (scrollStart && currState.firstFrameLatencyMs === null) {
+                currState.firstFrameLatencyMs = Math.round(performance.now() - scrollStart);
+              }
             }
+            setFirstFrameMap((prev) => ({ ...prev, [index]: true }));
           });
         } else {
           // Fallback for browsers without requestVideoFrameCallback
-          state.firstFrameRendered = true;
+          if (currState) {
+            currState.firstFrameRendered = true;
+            const scrollStart = scrollStartTimesRef.current.get(index);
+            if (scrollStart && currState.firstFrameLatencyMs === null) {
+              currState.firstFrameLatencyMs = Math.round(performance.now() - scrollStart);
+            }
+          }
           setFirstFrameMap((prev) => ({ ...prev, [index]: true }));
         }
       };
 
-      const onError = () => {
-        console.warn(`[ShortsV2Pool] Playback error on index ${index}. Falling back...`);
-        onSkipError?.(index);
+      const handleWaiting = () => {
+        const currState = elementStatesRef.current.get(index);
+        if (currState && currState.status === 'PLAYING') {
+          currState.bufferingEvents += 1;
+          spinnerCountRef.current += 1;
+        }
       };
 
-      el.addEventListener('canplay', onCanPlay, { once: true });
-      el.addEventListener('playing', onPlaying);
-      el.addEventListener('error', onError);
+      const handlePause = () => {
+        const currState = elementStatesRef.current.get(index);
+        if (currState && currState.status === 'PLAYING') {
+          currState.isPlaying = false;
+          currState.status = 'PAUSED';
+        }
+      };
 
-      // Trigger preloading
-      el.load();
+      const handleError = () => {
+        const currState = elementStatesRef.current.get(index);
+        if (currState) {
+          currState.status = 'IDLE';
+        }
+        console.warn(`[ShortsV2Pool] Playback error on index ${index}. Falling back...`);
+        onSkipErrorRef.current?.(index);
+      };
 
-      videoElementsRef.current.set(index, el);
+      el.addEventListener('canplay', handleCanPlay, { once: true });
+      el.addEventListener('playing', handlePlaying);
+      el.addEventListener('waiting', handleWaiting);
+      el.addEventListener('pause', handlePause);
+      el.addEventListener('error', handleError);
+
+      // Check if already ready (e.g. from cache or fast load)
+      if (el.readyState >= 3) {
+        handleCanPlay();
+      } else {
+        // Trigger preloading
+        el.load();
+      }
+
       return el;
     },
-    [onSkipError]
+    [safePlayVideo]
   );
 
-  // Attach/Mount host container for an index
+  // Attach host container for an index (STABLE CALLBACK)
   const attachV2Container = useCallback(
     (index: number, containerEl: HTMLDivElement | null) => {
       if (!containerEl) {
@@ -197,63 +353,39 @@ export function useShortsV2PlayerPool(
       }
 
       hostContainersRef.current.set(index, containerEl);
-      const video = videos[index];
+      const video = videosRef.current[index];
       if (!video?.storage_url) return;
 
-      const el = prepareVideoElement(index, video);
+      const priority = index === activeIndexRef.current ? 'active' : 'preload';
+      const el = prepareVideoElement(index, video, priority);
       if (el && !containerEl.contains(el)) {
         containerEl.innerHTML = '';
         containerEl.appendChild(el);
       }
     },
-    [videos, prepareVideoElement]
+    [prepareVideoElement]
   );
 
-  // Preload scheduler & lifecycle manager on activeIndex change
+  // Programmatically pause all V2 videos (used for mutual exclusion when V1 is active)
+  const pauseAllV2Videos = useCallback(() => {
+    videoElementsRef.current.forEach((el) => {
+      try {
+        el.pause();
+        el.muted = true;
+      } catch {
+        // ignore
+      }
+    });
+  }, []);
+
+  // Preload scheduler & lifecycle manager triggered on activeIndex changes
   useEffect(() => {
     const isLowMem = isLowMemoryDevice();
     const preloadAhead = isLowMem ? 1 : 2;
 
     scrollStartTimesRef.current.set(activeIndex, performance.now());
 
-    // 1. Prepare / Mount current active index [N]
-    const currentVideo = videos[activeIndex];
-    if (currentVideo?.storage_url) {
-      const activeEl = prepareVideoElement(activeIndex, currentVideo);
-      const activeHost = hostContainersRef.current.get(activeIndex);
-      if (activeEl && activeHost && !activeHost.contains(activeEl)) {
-        activeHost.innerHTML = '';
-        activeHost.appendChild(activeEl);
-      }
-
-      if (activeEl) {
-        if (hasUserGestureUnlocked && !isMuted) {
-          activeEl.muted = false;
-          activeEl.volume = 1.0;
-        } else {
-          activeEl.muted = true;
-        }
-
-        activeEl.play().catch((err) => {
-          // Autoplay policy blocked audio -> fall back to muted
-          if (err.name === 'NotAllowedError') {
-            activeEl.muted = true;
-            activeEl.play().catch(() => {});
-          }
-        });
-      }
-    }
-
-    // 2. Pre-buffer upcoming videos [N+1, N+2]
-    for (let offset = 1; offset <= preloadAhead; offset++) {
-      const targetIdx = activeIndex + offset;
-      const nextVid = videos[targetIdx];
-      if (nextVid?.storage_url) {
-        prepareVideoElement(targetIdx, nextVid);
-      }
-    }
-
-    // 3. Pause & mute all non-active elements
+    // 1. Immediately pause all non-active elements
     videoElementsRef.current.forEach((el, idx) => {
       if (idx !== activeIndex) {
         try {
@@ -265,6 +397,38 @@ export function useShortsV2PlayerPool(
         }
       }
     });
+
+    // 2. Prepare / Play current active index [N]
+    const currentVideo = videos[activeIndex];
+    if (currentVideo?.storage_url) {
+      const activeEl = prepareVideoElement(activeIndex, currentVideo, 'active');
+      const activeHost = hostContainersRef.current.get(activeIndex);
+      if (activeEl && activeHost && !activeHost.contains(activeEl)) {
+        activeHost.innerHTML = '';
+        activeHost.appendChild(activeEl);
+      }
+
+      if (activeEl) {
+        const state = elementStatesRef.current.get(activeIndex);
+        if (state?.isReady || activeEl.readyState >= 3) {
+          safePlayVideo(activeEl);
+        }
+      }
+    }
+
+    // 3. Priority Pre-buffer upcoming videos [N+1, N+2]
+    for (let offset = 1; offset <= preloadAhead; offset++) {
+      const targetIdx = activeIndex + offset;
+      const nextVid = videos[targetIdx];
+      if (nextVid?.storage_url) {
+        const preEl = prepareVideoElement(targetIdx, nextVid, 'preload');
+        const preHost = hostContainersRef.current.get(targetIdx);
+        if (preEl && preHost && !preHost.contains(preEl)) {
+          preHost.innerHTML = '';
+          preHost.appendChild(preEl);
+        }
+      }
+    }
 
     // 4. Memory management: Prune elements outside [N-1, N+preloadAhead]
     const keepRange = new Set<number>();
@@ -283,31 +447,57 @@ export function useShortsV2PlayerPool(
 
     indicesToPrune.forEach((idx) => teardownElement(idx));
 
-    // Update debug statistics
+    // 5. Update debug diagnostic statistics
     const slotsDebug: Record<number, string> = {};
-    videoElementsRef.current.forEach((el, idx) => {
+    videoElementsRef.current.forEach((_, idx) => {
       const state = elementStatesRef.current.get(idx);
-      slotsDebug[idx] = idx === activeIndex ? 'PLAYING' : state?.isReady ? 'READY' : 'WARMING';
+      slotsDebug[idx] =
+        idx === activeIndex
+          ? 'PLAYING'
+          : state?.status || (state?.isReady ? 'READY' : 'LOADING');
     });
 
     const activeState = elementStatesRef.current.get(activeIndex);
+    const nextState = elementStatesRef.current.get(activeIndex + 1);
+    const secondNextState = elementStatesRef.current.get(activeIndex + 2);
+
     setDebugInfo({
       activeSlot: activeIndex,
       poolSize: videoElementsRef.current.size,
       slots: slotsDebug,
       lastLatencyMs: activeState?.firstFrameLatencyMs ?? null,
+      timeToCanplayMs: activeState?.timeToCanplayMs ?? null,
+      timeToFirstFrameMs: activeState?.firstFrameLatencyMs ?? null,
+      cdnTimingMs: activeState?.cdnDownloadTimingMs ?? null,
+      bufferingEvents: activeState?.bufferingEvents ?? 0,
       spinnerCount: spinnerCountRef.current,
       lowMemoryMode: isLowMem,
+      nextPreloadState: nextState?.status ?? (nextState?.isReady ? 'READY' : 'IDLE'),
+      secondNextPreloadState: isLowMem
+        ? 'SKIPPED (low-mem)'
+        : secondNextState?.status ?? (secondNextState?.isReady ? 'READY' : 'IDLE'),
     });
   }, [
     activeIndex,
     videos,
-    isMuted,
-    hasUserGestureUnlocked,
     isLowMemoryDevice,
     prepareVideoElement,
+    safePlayVideo,
     teardownElement,
   ]);
+
+  // Audio mute/unmute synchronization when user gesture or mute changes
+  useEffect(() => {
+    const activeEl = videoElementsRef.current.get(activeIndex);
+    if (!activeEl) return;
+
+    if (hasUserGestureUnlocked && !isMuted) {
+      activeEl.muted = false;
+      activeEl.volume = 1.0;
+    } else {
+      activeEl.muted = true;
+    }
+  }, [activeIndex, isMuted, hasUserGestureUnlocked]);
 
   // Handle tap gesture anywhere on the video
   const handleUserGesturePlayback = useCallback(() => {
@@ -389,6 +579,7 @@ export function useShortsV2PlayerPool(
 
   return {
     attachV2Container,
+    pauseAllV2Videos,
     readyMap,
     playingMap,
     firstFrameMap,
@@ -397,4 +588,3 @@ export function useShortsV2PlayerPool(
     debugInfo,
   };
 }
-
