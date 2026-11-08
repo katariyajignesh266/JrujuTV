@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useRef, useEffect, memo } from 'react';
-import { Loader2, VolumeX } from 'lucide-react';
+import { Loader2, VolumeX, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ShortVideo } from '../types';
 import { useShortsFeatureStore } from '../store/shortsStore';
@@ -20,9 +20,11 @@ interface ShortsItemProps {
   isV2Ready?: boolean;
   isV2Playing?: boolean;
   isV2FirstFrame?: boolean;
+  errorMessage?: string | null;
   onAttachContainer: (index: number, el: HTMLDivElement | null) => void;
   onAttachV2Container?: (index: number, el: HTMLDivElement | null) => void;
   onGestureTap: () => void;
+  onRetry?: () => void;
 }
 
 export const ShortsItem = memo(function ShortsItem({
@@ -36,9 +38,11 @@ export const ShortsItem = memo(function ShortsItem({
   isV2Ready = false,
   isV2Playing = false,
   isV2FirstFrame = false,
+  errorMessage = null,
   onAttachContainer,
   onAttachV2Container,
   onGestureTap,
+  onRetry,
 }: ShortsItemProps) {
   const iframeContainerRef = useRef<HTMLDivElement | null>(null);
   const { hasUserGestureUnlocked } = useShortsFeatureStore();
@@ -62,7 +66,7 @@ export const ShortsItem = memo(function ShortsItem({
   // For V1: remove poster when player starts playing.
   const effectivePlaying = isV2 ? isV2FirstFrame : isPlaying;
   const posterUrl = video.poster_url || video.thumbnail_url;
-  const isBuffering = isActive && !effectivePlaying;
+  const isBuffering = isActive && !effectivePlaying && !errorMessage;
 
   return (
     <div className="relative w-full h-full shrink-0 bg-black flex flex-col justify-between overflow-hidden select-none">
@@ -74,14 +78,16 @@ export const ShortsItem = memo(function ShortsItem({
         />
       )}
 
-      {/* 2. Video Player Layer */}
+      {/* 2. Video Player Layer (Mounted only within the active lookahead window) */}
       {isV2 && onAttachV2Container ? (
         /* V2 Native HTML5 Video Player */
-        <ShortsVideoPlayer
-          index={index}
-          isActive={isActive}
-          onAttachContainer={onAttachV2Container}
-        />
+        isMounted ? (
+          <ShortsVideoPlayer
+            index={index}
+            isActive={isActive}
+            onAttachContainer={onAttachV2Container}
+          />
+        ) : null
       ) : (
         /* V1 Scaled YouTube IFrame Player */
         <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none overflow-hidden">
@@ -117,6 +123,32 @@ export const ShortsItem = memo(function ShortsItem({
               </div>
             </div>
           )}
+
+          {/* Controlled Error State (Non-endless spinner recovery) */}
+          {isActive && errorMessage && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/75 backdrop-blur-sm pointer-events-auto z-20">
+              <div className="flex flex-col items-center text-center px-6 py-4 max-w-xs bg-neutral-900/90 border border-neutral-700 rounded-2xl shadow-2xl text-white space-y-3">
+                <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">Unable to play video</p>
+                  <p className="text-xs text-neutral-400 line-clamp-2">{errorMessage}</p>
+                </div>
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRetry();
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-semibold rounded-full shadow-lg transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <RefreshCw size={14} />
+                    <span>Try Again</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -134,7 +166,7 @@ export const ShortsItem = memo(function ShortsItem({
       </div>
 
       {/* 6. Sound Status Indicator: shown until first user tap unlocks session sound */}
-      {isActive && !hasUserGestureUnlocked && (
+      {isActive && !hasUserGestureUnlocked && !errorMessage && (
         <div className="absolute top-[calc(env(safe-area-inset-top,0px)+12px)] right-4 z-30 pointer-events-none animate-pulse">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium shadow-md">
             <VolumeX size={13} className="text-red-400" />

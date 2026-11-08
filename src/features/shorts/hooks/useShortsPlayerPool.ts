@@ -55,6 +55,8 @@ interface PlayerPoolEntry {
   hostDiv: HTMLDivElement;
   isReady: boolean;
   isPrimed: boolean;
+  hasError: boolean;
+  errorMessage: string | null;
 }
 
 export function useShortsPlayerPool(
@@ -66,6 +68,7 @@ export function useShortsPlayerPool(
 
   const poolRef = useRef<Map<number, PlayerPoolEntry>>(new Map());
   const [playingIndices, setPlayingIndices] = useState<Record<number, boolean>>({});
+  const [errorMap, setErrorMap] = useState<Record<number, string>>({});
   const [progressMap, setProgressMap] = useState<Record<number, number>>({});
 
   // Heartbeat tracking for watch progress
@@ -170,11 +173,23 @@ export function useShortsPlayerPool(
       const existing = poolRef.current.get(index);
       if (existing) {
         if (existing.videoId === video.youtube_video_id) {
-          // Player already exists for this video. If detached, re-attach hostDiv without re-initializing!
-          if (existing.containerEl !== containerEl || !containerEl.contains(existing.hostDiv)) {
-            existing.containerEl = containerEl;
-            containerEl.innerHTML = '';
-            containerEl.appendChild(existing.hostDiv);
+          // Player already exists for this video. If detached, re-attach iframe cleanly without re-initializing!
+          try {
+            const iframe = existing.player?.getIframe?.();
+            if (iframe && !containerEl.contains(iframe)) {
+              existing.containerEl = containerEl;
+              containerEl.replaceChildren(iframe);
+            }
+          } catch {
+            // ignore
+          }
+
+          if (index === activeIndexRef.current && existing.isReady) {
+            try {
+              existing.player?.playVideo?.();
+            } catch {
+              // ignore
+            }
           }
           return;
         }
@@ -263,9 +278,16 @@ export function useShortsPlayerPool(
               }
             },
             onError: (event: any) => {
+              const errMsg = `YouTube Error code ${event.data}`;
               console.warn(
-                `[ShortsPlayer] YouTube error ${event.data} on video ${video.youtube_video_id}. Auto-advancing...`
+                `[ShortsPlayer] YouTube error ${event.data} on video ${video.youtube_video_id} (index ${index}).`
               );
+              const entry = poolRef.current.get(index);
+              if (entry) {
+                entry.hasError = true;
+                entry.errorMessage = errMsg;
+              }
+              setErrorMap((prev) => ({ ...prev, [index]: errMsg }));
               onSkipErrorRef.current?.(index);
             },
           },
@@ -278,6 +300,8 @@ export function useShortsPlayerPool(
           hostDiv,
           isReady: false,
           isPrimed: false,
+          hasError: false,
+          errorMessage: null,
         });
       });
     },
@@ -298,6 +322,11 @@ export function useShortsPlayerPool(
             entry.player.mute?.();
           }
           entry.player.playVideo?.();
+
+          // If already playing in memory, reflect in state immediately
+          if (entry.player.getPlayerState?.() === 1) {
+            setPlayingIndices((prev) => ({ ...prev, [idx]: true }));
+          }
         } else {
           entry.player.mute?.();
           entry.player.pauseVideo?.();
@@ -353,6 +382,35 @@ export function useShortsPlayerPool(
     }
   }, [activeIndex, hasUserGestureUnlocked, setGestureUnlocked]);
 
+  // Explicit retry action for V1
+  const retryV1Player = useCallback(
+    (index: number) => {
+      const entry = poolRef.current.get(index);
+      if (entry) {
+        try {
+          entry.player?.destroy();
+        } catch {
+          // ignore
+        }
+        poolRef.current.delete(index);
+      }
+      setErrorMap((prev) => {
+        const copy = { ...prev };
+        delete copy[index];
+        return copy;
+      });
+
+      const video = videosRef.current[index];
+      if (!video) return;
+
+      // Re-trigger attach
+      if (entry?.containerEl) {
+        attachPlayer(index, entry.containerEl);
+      }
+    },
+    [attachPlayer]
+  );
+
   // Heartbeat progress tracking timer (1 sec)
   useEffect(() => {
     const timer = setInterval(() => {
@@ -396,7 +454,9 @@ export function useShortsPlayerPool(
     attachPlayer,
     pauseAllV1Players,
     playingIndices,
+    errorMap,
     progressMap,
     handleUserGesturePlayback,
+    retryV1Player,
   };
 }

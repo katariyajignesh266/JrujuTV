@@ -13,6 +13,7 @@ import { useShortsV2PlayerPool } from '../hooks/useShortsV2PlayerPool';
 import { ShortsItem } from './ShortsItem';
 import { ShortsEmptyState } from './ShortsEmptyState';
 import { ShortsDebugOverlay } from './ShortsDebugOverlay';
+import { ShortVideo } from '../types';
 
 export function ShortsContainer() {
   const { initialized } = useAuthStore();
@@ -21,6 +22,7 @@ export function ShortsContainer() {
 
   const isV2FeatureFlag = process.env.NEXT_PUBLIC_SHORTS_V2 === 'true';
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const [v2FallbackMap, setV2FallbackMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -64,13 +66,32 @@ export function ShortsContainer() {
     }
   }, [activeIndex, scrollToIndex]);
 
+  // Helper to check if a video item qualifies for V2
+  const isVideoV2 = useCallback(
+    (video: ShortVideo | undefined, index: number) => {
+      if (!isV2FeatureFlag) return false;
+      if (v2FallbackMap[index]) return false;
+      return !!video?.storage_url && video?.media_status === 'ready';
+    },
+    [isV2FeatureFlag, v2FallbackMap]
+  );
+
   const handleSkipError = useCallback(
     (index: number) => {
+      const vid = videos[index];
+      // If error occurs on V2 and YouTube ID is available, fall back to V1 seamlessly!
+      if (isVideoV2(vid, index) && vid?.youtube_video_id) {
+        console.warn(`[ShortsContainer] V2 playback failed on index ${index}. Switching to V1 YouTube fallback.`);
+        setV2FallbackMap((prev) => ({ ...prev, [index]: true }));
+        return;
+      }
+
+      // If already active video fails completely, auto-advance to next short
       if (index === activeIndex && activeIndex < videos.length - 1) {
         scrollToIndex(activeIndex + 1);
       }
     },
-    [activeIndex, videos.length, scrollToIndex]
+    [videos, activeIndex, isVideoV2, scrollToIndex]
   );
 
   // V1 YouTube IFrame Pool (Fallback)
@@ -78,8 +99,10 @@ export function ShortsContainer() {
     attachPlayer: attachV1Player,
     pauseAllV1Players,
     playingIndices: v1PlayingIndices,
+    errorMap: v1ErrorMap,
     progressMap: v1ProgressMap,
     handleUserGesturePlayback: handleV1Gesture,
+    retryV1Player,
   } = useShortsPlayerPool(videos, handleSkipError);
 
   // V2 Native Video Pool (Instant, Zero-Spinner)
@@ -89,17 +112,16 @@ export function ShortsContainer() {
     readyMap: v2ReadyMap,
     playingMap: v2PlayingMap,
     firstFrameMap: v2FirstFrameMap,
+    errorMap: v2ErrorMap,
     progressMap: v2ProgressMap,
     handleUserGesturePlayback: handleV2Gesture,
+    retryVideo: retryV2Video,
     debugInfo: v2DebugInfo,
   } = useShortsV2PlayerPool(videos, handleSkipError);
 
   // Determine active item engine
   const currentVideo = videos[activeIndex];
-  const isCurrentActiveV2 =
-    isV2FeatureFlag &&
-    !!currentVideo?.storage_url &&
-    currentVideo?.media_status === 'ready';
+  const isCurrentActiveV2 = isVideoV2(currentVideo, activeIndex);
 
   // Mutual exclusion: ensure V1 and V2 never play simultaneously
   useEffect(() => {
@@ -272,6 +294,8 @@ export function ShortsContainer() {
           isV2Enabled={isV2FeatureFlag}
           activeEngine={isCurrentActiveV2 ? 'V2 (Native R2/CDN)' : 'V1 (YouTube IFrame)'}
           currentMediaStatus={currentVideo?.media_status || 'none'}
+          currentStorageUrl={currentVideo?.storage_url || null}
+          currentVideoId={currentVideo?.id || currentVideo?.youtube_video_id || ''}
           totalLoaded={videos.length}
         />
       )}
@@ -307,11 +331,7 @@ export function ShortsContainer() {
                 // Mount sliding window [activeIndex - 1, activeIndex, activeIndex + 1, activeIndex + 2] for smooth preloading
                 const isNearActive = index >= activeIndex - 1 && index <= activeIndex + 2;
 
-                // Determine whether this item qualifies for V2 Native Video
-                const isItemV2 =
-                  isV2FeatureFlag &&
-                  !!video.storage_url &&
-                  video.media_status === 'ready';
+                const isItemV2 = isVideoV2(video, index);
 
                 const isPlaying = isItemV2
                   ? !!v2PlayingMap[index]
@@ -324,6 +344,18 @@ export function ShortsContainer() {
                 const gestureHandler = isItemV2
                   ? handleV2Gesture
                   : handleV1Gesture;
+
+                const errorMessage = isItemV2
+                  ? v2ErrorMap[index] ?? null
+                  : v1ErrorMap[index] ?? null;
+
+                const retryHandler = () => {
+                  if (isItemV2) {
+                    retryV2Video(index);
+                  } else {
+                    retryV1Player(index);
+                  }
+                };
 
                 return (
                   <div
@@ -350,9 +382,11 @@ export function ShortsContainer() {
                       isV2Ready={!!v2ReadyMap[index]}
                       isV2Playing={!!v2PlayingMap[index]}
                       isV2FirstFrame={!!v2FirstFrameMap[index]}
+                      errorMessage={errorMessage}
                       onAttachContainer={attachV1Player}
                       onAttachV2Container={attachV2Container}
                       onGestureTap={gestureHandler}
+                      onRetry={retryHandler}
                     />
                   </div>
                 );
