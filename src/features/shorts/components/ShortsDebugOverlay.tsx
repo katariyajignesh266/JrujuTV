@@ -1,8 +1,10 @@
 // src/features/shorts/components/ShortsDebugOverlay.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { V2PoolDebugInfo } from '../hooks/useShortsV2PlayerPool';
+import { ShortDiagnosticLog } from '../types';
+import { Copy, Check } from 'lucide-react';
 
 interface ShortsDebugOverlayProps {
   debugInfo: V2PoolDebugInfo;
@@ -12,6 +14,9 @@ interface ShortsDebugOverlayProps {
   currentStorageUrl?: string | null;
   currentVideoId?: string;
   totalLoaded: number;
+  v1DiagnosticLogs?: ShortDiagnosticLog[];
+  v1ErrorMap?: Record<number, string>;
+  v2ErrorMap?: Record<number, string>;
 }
 
 export function ShortsDebugOverlay({
@@ -21,8 +26,12 @@ export function ShortsDebugOverlay({
   currentStorageUrl,
   currentVideoId,
   totalLoaded,
+  v1DiagnosticLogs = [],
+  v1ErrorMap = {},
+  v2ErrorMap = {},
 }: ShortsDebugOverlayProps) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const {
     activeSlot,
@@ -45,6 +54,36 @@ export function ShortsDebugOverlay({
 
   const isV2Active = activeEngine.startsWith('V2');
   const activeDetail = slotDetails[activeSlot];
+
+  // One-click comprehensive failed shorts report copy
+  const handleCopyFailureReport = useCallback(() => {
+    const report = {
+      timestamp: new Date().toISOString(),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      activeSlot,
+      activeEngine,
+      totalLoaded,
+      v1Errors: v1ErrorMap,
+      v2Errors: v2ErrorMap,
+      v1DiagnosticLogs,
+      v2SlotDetails: slotDetails,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  }, [
+    activeSlot,
+    activeEngine,
+    totalLoaded,
+    v1ErrorMap,
+    v2ErrorMap,
+    v1DiagnosticLogs,
+    slotDetails,
+  ]);
 
   return (
     <div className="fixed top-14 right-3 z-50 pointer-events-auto select-none font-mono text-[11px] bg-black/90 backdrop-blur-md border border-white/20 text-green-400 p-3 rounded-xl shadow-2xl max-w-sm space-y-2">
@@ -69,6 +108,19 @@ export function ShortsDebugOverlay({
         >
           {activeEngine}
         </span>
+      </div>
+
+      {/* Copy Failure Report Action */}
+      <div className="flex items-center justify-between py-1 px-2 rounded-lg bg-neutral-900 border border-neutral-700">
+        <span className="text-[10px] text-neutral-300 font-medium">Diagnostic Report</span>
+        <button
+          type="button"
+          onClick={handleCopyFailureReport}
+          className="flex items-center gap-1 px-2 py-0.5 rounded bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/40 text-brand-primary text-[10px] transition-all cursor-pointer"
+        >
+          {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+          <span>{copied ? 'Copied JSON!' : 'Copy Report'}</span>
+        </button>
       </div>
 
       {/* Primary Metrics Grid */}

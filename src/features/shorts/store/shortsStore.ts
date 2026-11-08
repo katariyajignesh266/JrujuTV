@@ -16,6 +16,10 @@ interface ShortsStoreState {
   // Active item tracking
   activeIndex: number;
   setActiveIndex: (index: number) => void;
+
+  // Session-level unplayable blacklist (immediately pruned without waiting for DB migration)
+  unplayableVideoIds: Set<string>;
+  markVideoUnplayable: (idOrYoutubeId: string) => void;
 }
 
 export const useShortsFeatureStore = create<ShortsStoreState>((set) => ({
@@ -28,4 +32,12 @@ export const useShortsFeatureStore = create<ShortsStoreState>((set) => ({
 
   activeIndex: 0,
   setActiveIndex: (index) => set({ activeIndex: index }),
+
+  unplayableVideoIds: new Set<string>(),
+  markVideoUnplayable: (idOrYoutubeId: string) =>
+    set((state) => {
+      const next = new Set(state.unplayableVideoIds);
+      next.add(idOrYoutubeId);
+      return { unplayableVideoIds: next };
+    }),
 }));

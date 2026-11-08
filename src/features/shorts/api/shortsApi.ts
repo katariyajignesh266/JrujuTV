@@ -70,3 +70,27 @@ export async function updateChannelShortsSettings(
     throw new Error(error.message);
   }
 }
+
+/**
+ * Report an unplayable short immediately to mark it in the database
+ * so it is automatically excluded from all subsequent feeds.
+ * Uses Next.js same-origin API route to avoid CORS and Edge Function deployment hurdles.
+ */
+export async function reportUnplayableShort(
+  videoId: string,
+  reason: string = 'client_watchdog_timeout'
+): Promise<void> {
+  try {
+    if (!videoId) return;
+
+    await fetch('/api/shorts/unplayable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId, reason }),
+      keepalive: true, // Ensures request completes even if user immediately scrolls
+    });
+  } catch (err: any) {
+    // Non-blocking background telemetry: fail silently without polluting console
+  }
+}
+

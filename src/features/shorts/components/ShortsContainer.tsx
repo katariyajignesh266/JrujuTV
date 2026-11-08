@@ -18,7 +18,7 @@ import { ShortVideo } from '../types';
 export function ShortsContainer() {
   const { initialized } = useAuthStore();
   const { sidebarOpen } = useUIStore();
-  const { activeIndex, setActiveIndex } = useShortsFeatureStore();
+  const { activeIndex, setActiveIndex, markVideoUnplayable } = useShortsFeatureStore();
 
   const isV2FeatureFlag = process.env.NEXT_PUBLIC_SHORTS_V2 === 'true';
   const [isDebugMode, setIsDebugMode] = useState(false);
@@ -86,12 +86,16 @@ export function ShortsContainer() {
         return;
       }
 
-      // If already active video fails completely, auto-advance to next short
+      // Mark unplayable in session store immediately so it never repeats
+      if (vid?.id) markVideoUnplayable(vid.id);
+      if (vid?.youtube_video_id) markVideoUnplayable(vid.youtube_video_id);
+
+      // If active video fails completely, auto-advance silently to next short within < 500ms
       if (index === activeIndex && activeIndex < videos.length - 1) {
         scrollToIndex(activeIndex + 1);
       }
     },
-    [videos, activeIndex, isVideoV2, scrollToIndex]
+    [videos, activeIndex, isVideoV2, markVideoUnplayable, scrollToIndex]
   );
 
   // V1 YouTube IFrame Pool (Fallback)
@@ -103,6 +107,7 @@ export function ShortsContainer() {
     progressMap: v1ProgressMap,
     handleUserGesturePlayback: handleV1Gesture,
     retryV1Player,
+    getDiagnosticLogs,
   } = useShortsPlayerPool(videos, handleSkipError);
 
   // V2 Native Video Pool (Instant, Zero-Spinner)
@@ -166,44 +171,35 @@ export function ShortsContainer() {
     };
   }, [videos, setActiveIndex]);
 
-  // 2. Real-time Scroll Synchronizer & Programmatic Snap Fallback
+  // 2. Programmatic Snap Center Alignment Fallback (Observer is authoritative for activeIndex)
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
     let snapTimeout: NodeJS.Timeout | null = null;
 
-    const handleScrollSync = () => {
+    const handleScrollSnapCheck = () => {
       const h = container.clientHeight;
       if (h <= 0) return;
 
       const currentTop = container.scrollTop;
-      const calculatedIndex = Math.round(currentTop / h);
+      const targetIndex = Math.round(currentTop / h);
 
-      if (
-        calculatedIndex >= 0 &&
-        calculatedIndex < videos.length &&
-        calculatedIndex !== activeIndex
-      ) {
-        setActiveIndex(calculatedIndex);
-      }
-
-      // Programmatic snap fallback if CSS snap rests off-center
       if (snapTimeout) clearTimeout(snapTimeout);
       snapTimeout = setTimeout(() => {
-        const targetTop = calculatedIndex * h;
+        const targetTop = targetIndex * h;
         if (Math.abs(container.scrollTop - targetTop) > 2) {
           container.scrollTo({ top: targetTop, behavior: 'smooth' });
         }
-      }, 120);
+      }, 150);
     };
 
-    container.addEventListener('scroll', handleScrollSync, { passive: true });
+    container.addEventListener('scroll', handleScrollSnapCheck, { passive: true });
     return () => {
-      container.removeEventListener('scroll', handleScrollSync);
+      container.removeEventListener('scroll', handleScrollSnapCheck);
       if (snapTimeout) clearTimeout(snapTimeout);
     };
-  }, [videos.length, activeIndex, setActiveIndex]);
+  }, []);
 
   // 3. Infinite Feed Sentinel: triggers loadMore before user reaches bottom
   useEffect(() => {
@@ -297,6 +293,9 @@ export function ShortsContainer() {
           currentStorageUrl={currentVideo?.storage_url || null}
           currentVideoId={currentVideo?.id || currentVideo?.youtube_video_id || ''}
           totalLoaded={videos.length}
+          v1DiagnosticLogs={getDiagnosticLogs()}
+          v1ErrorMap={v1ErrorMap}
+          v2ErrorMap={v2ErrorMap}
         />
       )}
 

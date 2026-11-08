@@ -123,7 +123,7 @@ serve(async (req) => {
 
       if (items.length > 0) {
         const videoIds = items.map((it: any) => it.contentDetails?.videoId).filter(Boolean);
-        const vDetailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds.join(
+        const vDetailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet,status&id=${videoIds.join(
           ','
         )}&key=${youtubeApiKey}`;
         const vRes = await fetch(vDetailUrl);
@@ -137,14 +137,22 @@ serve(async (req) => {
             if (!vidId) return null;
             const detail = videoMap.get(vidId);
             const snippet = item.snippet || {};
+            const durationSec = parseIsoDuration(detail?.contentDetails?.duration || '');
+            const isEmbeddable = detail?.status?.embeddable !== false;
+            const privacyStatus = detail?.status?.privacyStatus || 'public';
+            const isPlayable = isEmbeddable && privacyStatus === 'public' && durationSec > 0;
+
             return {
               channel_id: channelId,
               youtube_video_id: vidId,
               title: snippet.title || 'Untitled Video',
               thumbnail_url: bestThumbnail(snippet.thumbnails, vidId),
-              duration_seconds: parseIsoDuration(detail?.contentDetails?.duration || ''),
+              duration_seconds: durationSec,
               view_count: parseInt(detail?.statistics?.viewCount || '0', 10),
               published_at: snippet.publishedAt || item.contentDetails?.videoPublishedAt || null,
+              is_embeddable: isEmbeddable,
+              playback_status: isPlayable ? 'playable' : 'unplayable',
+              last_checked_at: new Date().toISOString(),
               last_synced_at: new Date().toISOString(),
             };
           })
@@ -251,7 +259,7 @@ serve(async (req) => {
           .map((it: any) => it.contentDetails?.videoId)
           .filter(Boolean);
 
-        const vDetailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds.join(
+        const vDetailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet,status&id=${videoIds.join(
           ','
         )}&key=${youtubeApiKey}`;
         const vRes = await fetch(vDetailUrl);
@@ -266,14 +274,22 @@ serve(async (req) => {
             if (!vidId) return null;
             const detail = videoMap.get(vidId);
             const snippet = item.snippet || {};
+            const durationSec = parseIsoDuration(detail?.contentDetails?.duration || '');
+            const isEmbeddable = detail?.status?.embeddable !== false;
+            const privacyStatus = detail?.status?.privacyStatus || 'public';
+            const isPlayable = isEmbeddable && privacyStatus === 'public' && durationSec > 0;
+
             return {
               channel_id: channelId,
               youtube_video_id: vidId,
               title: snippet.title || 'Untitled Video',
               thumbnail_url: bestThumbnail(snippet.thumbnails, vidId),
-              duration_seconds: parseIsoDuration(detail?.contentDetails?.duration || ''),
+              duration_seconds: durationSec,
               view_count: parseInt(detail?.statistics?.viewCount || '0', 10),
               published_at: snippet.publishedAt || item.contentDetails?.videoPublishedAt || null,
+              is_embeddable: isEmbeddable,
+              playback_status: isPlayable ? 'playable' : 'unplayable',
+              last_checked_at: new Date().toISOString(),
               last_synced_at: new Date().toISOString(),
             };
           })

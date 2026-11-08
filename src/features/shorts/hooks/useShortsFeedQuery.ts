@@ -9,10 +9,17 @@ import { useShortsFeatureStore } from '../store/shortsStore';
 const PAGE_SIZE = 15;
 
 function isValidYouTubeId(id: string | null | undefined): boolean {
-  return typeof id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(id.trim());
+  if (typeof id !== 'string') return false;
+  const trimmed = id.trim();
+  // Valid YouTube video ID: standard 11 alphanumeric, underscore, or dash
+  return /^[a-zA-Z0-9_-]{11}$/.test(trimmed);
 }
 
-function sanitizeAndDedupe(incoming: ShortVideo[], existing: ShortVideo[] = []): ShortVideo[] {
+function sanitizeAndDedupe(
+  incoming: ShortVideo[],
+  existing: ShortVideo[] = [],
+  blacklist: Set<string> = new Set()
+): ShortVideo[] {
   const seenIds = new Set<string>();
   const seenYtIds = new Set<string>();
 
@@ -25,8 +32,19 @@ function sanitizeAndDedupe(incoming: ShortVideo[], existing: ShortVideo[] = []):
   for (const v of incoming) {
     if (!v) continue;
     const ytId = v.youtube_video_id?.trim();
-    if (!isValidYouTubeId(ytId)) continue;
+    if (!isValidYouTubeId(ytId)) {
+      if (typeof window !== 'undefined' && (window as any).__SHORTS_DEBUG__) {
+        console.warn('[sanitizeAndDedupe] Skipped invalid YouTube video ID:', v.youtube_video_id);
+      }
+      continue;
+    }
+    // Check blacklist from watchdog reports
+    if (blacklist.has(v.id) || blacklist.has(ytId)) continue;
+
     if (seenYtIds.has(ytId) || (v.id && seenIds.has(v.id))) continue;
+
+    // Filter out rows that are explicitly marked error or duration 0
+    if (v.media_status === 'error' || v.duration_seconds === 0) continue;
 
     seenIds.add(v.id);
     seenYtIds.add(ytId);
@@ -47,7 +65,7 @@ export function useShortsFeedQuery(initialized: boolean) {
   const [hasMore, setHasMore] = useState(true);
   const [totalEligible, setTotalEligible] = useState(0);
 
-  const { activeIndex } = useShortsFeatureStore();
+  const { activeIndex, unplayableVideoIds } = useShortsFeatureStore();
   const isFetchingRef = useRef(false);
 
   // Initial load
@@ -58,7 +76,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoading(true);
       cursorRef.current = 0;
       const res = await fetchShortsFeed(seedRef.current, 0, PAGE_SIZE);
-      const cleaned = sanitizeAndDedupe(res.videos || []);
+      const cleaned = sanitizeAndDedupe(res.videos || [], [], unplayableVideoIds);
       setVideos(cleaned);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor ?? cleaned.length;
@@ -69,7 +87,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoading(false);
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [unplayableVideoIds]);
 
   useEffect(() => {
     loadInitialFeed();
@@ -102,7 +120,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       }
 
       setVideos((prev) => {
-        const appended = sanitizeAndDedupe(incoming, prev);
+        const appended = sanitizeAndDedupe(incoming, prev, unplayableVideoIds);
         return [...prev, ...appended];
       });
 
@@ -113,7 +131,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoadingMore(false);
       isFetchingRef.current = false;
     }
-  }, [loadingMore]);
+  }, [loadingMore, unplayableVideoIds]);
 
   // Lookahead prefetch: trigger when 5 items remain before reaching the end
   useEffect(() => {

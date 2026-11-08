@@ -3,8 +3,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useShortsFeatureStore } from '../store/shortsStore';
-import { recordShortProgress } from '../api/shortsApi';
-import { ShortVideo } from '../types';
+import { recordShortProgress, reportUnplayableShort } from '../api/shortsApi';
+import { ShortVideo, ShortPlaybackState, ShortDiagnosticLog } from '../types';
 
 declare global {
   interface Window {
@@ -51,12 +51,20 @@ export function loadYouTubeIframeApi(): Promise<void> {
 interface PlayerPoolEntry {
   player: any;
   videoId: string;
+  youtubeId: string;
   containerEl: HTMLDivElement;
   hostDiv: HTMLDivElement;
   isReady: boolean;
   isPrimed: boolean;
   hasError: boolean;
   errorMessage: string | null;
+  state: ShortPlaybackState;
+  stateTransitions: { state: ShortPlaybackState; timestamp: number }[];
+  watchdogTimer: NodeJS.Timeout | null;
+  retriedOnce: boolean;
+  mountToken: number;
+  timeToFirstFrameMs: number | null;
+  startTime: number;
 }
 
 export function useShortsPlayerPool(
@@ -70,6 +78,10 @@ export function useShortsPlayerPool(
   const [playingIndices, setPlayingIndices] = useState<Record<number, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<number, string>>({});
   const [progressMap, setProgressMap] = useState<Record<number, number>>({});
+  const [statusMap, setStatusMap] = useState<Record<number, ShortPlaybackState>>({});
+
+  // Structured diagnostic history for ?debug=1 (zero cost when not exported)
+  const diagnosticLogsRef = useRef<Map<number, ShortDiagnosticLog>>(new Map());
 
   // Heartbeat tracking for watch progress
   const activeVideoRef = useRef<ShortVideo | null>(null);
@@ -78,7 +90,7 @@ export function useShortsPlayerPool(
   const maxPercentRef = useRef<number>(0);
   const hasRecorded50PercentRef = useRef<boolean>(false);
 
-  // Live stable references to prevent unnecessary callback invalidations
+  // Live stable references to prevent unnecessary callback invalidations & stale closures
   const videosRef = useRef<ShortVideo[]>(videos);
   videosRef.current = videos;
   const activeIndexRef = useRef<number>(activeIndex);
@@ -90,9 +102,46 @@ export function useShortsPlayerPool(
   const onSkipErrorRef = useRef(onSkipError);
   onSkipErrorRef.current = onSkipError;
 
+  // Mount generation token to invalidate late async events from discarded mounts
+  const mountTokenRef = useRef(0);
+
   // Load YouTube API script once on mount
   useEffect(() => {
     loadYouTubeIframeApi();
+  }, []);
+
+  // Update diagnostic entry
+  const recordTransition = useCallback((index: number, state: ShortPlaybackState, extra?: Partial<ShortDiagnosticLog>) => {
+    const entry = poolRef.current.get(index);
+    const now = Date.now();
+    if (entry) {
+      entry.state = state;
+      entry.stateTransitions.push({ state, timestamp: now });
+    }
+    setStatusMap((prev) => ({ ...prev, [index]: state }));
+
+    const video = videosRef.current[index];
+    const existingLog = diagnosticLogsRef.current.get(index) || {
+      index,
+      videoId: video?.id || '',
+      youtubeId: video?.youtube_video_id || '',
+      source: 'V1',
+      state,
+      stateTransitions: [],
+      errorCode: null,
+      errorMessage: null,
+      timeToFirstFrameMs: null,
+      poolState: 'INITIAL',
+      watchdogTriggered: false,
+      timestamp: new Date().toISOString(),
+    };
+
+    existingLog.state = state;
+    existingLog.stateTransitions.push({ state, timestamp: now });
+    if (extra) {
+      Object.assign(existingLog, extra);
+    }
+    diagnosticLogsRef.current.set(index, existingLog);
   }, []);
 
   // Flush watched progress when changing active video
@@ -122,9 +171,11 @@ export function useShortsPlayerPool(
   // Clean up all players on complete unmount
   useEffect(() => {
     const pool = poolRef.current;
+    const diagnosticLogs = diagnosticLogsRef.current;
     return () => {
       flushProgress();
       pool.forEach((entry) => {
+        if (entry.watchdogTimer) clearTimeout(entry.watchdogTimer);
         try {
           entry.player?.destroy();
         } catch {
@@ -132,6 +183,7 @@ export function useShortsPlayerPool(
         }
       });
       pool.clear();
+      diagnosticLogs.clear();
     };
   }, [flushProgress]);
 
@@ -147,6 +199,39 @@ export function useShortsPlayerPool(
     });
   }, []);
 
+  // Teardown single entry safely
+  const destroySlot = useCallback((index: number) => {
+    const existing = poolRef.current.get(index);
+    if (existing) {
+      if (existing.watchdogTimer) clearTimeout(existing.watchdogTimer);
+      try {
+        existing.player?.destroy();
+      } catch {
+        // ignore
+      }
+      poolRef.current.delete(index);
+    }
+  }, []);
+
+  // Safe play implementation with platform autoplay handling (iOS vs Android)
+  const safePlayV1 = useCallback((player: any, index: number) => {
+    if (index !== activeIndexRef.current || !player) return;
+
+    try {
+      if (hasUserGestureUnlockedRef.current && !isMutedRef.current) {
+        player.unMute();
+        player.setVolume(100);
+      } else {
+        player.mute();
+      }
+
+      // iOS Safari and Android Chrome require explicit play handling
+      player.playVideo();
+    } catch (err) {
+      console.warn(`[useShortsPlayerPool] safePlayV1 error on index ${index}:`, err);
+    }
+  }, []);
+
   // Attach a player instance to a slot container element (STABLE CALLBACK)
   const attachPlayer = useCallback(
     (index: number, containerEl: HTMLDivElement | null) => {
@@ -154,15 +239,7 @@ export function useShortsPlayerPool(
         // Only destroy if slot is outside the sliding cache window [activeIndex - 1, activeIndex + 2]
         const currentActive = activeIndexRef.current;
         if (index < currentActive - 1 || index > currentActive + 2) {
-          const existing = poolRef.current.get(index);
-          if (existing) {
-            try {
-              existing.player?.destroy();
-            } catch {
-              // ignore
-            }
-            poolRef.current.delete(index);
-          }
+          destroySlot(index);
         }
         return;
       }
@@ -172,7 +249,7 @@ export function useShortsPlayerPool(
 
       const existing = poolRef.current.get(index);
       if (existing) {
-        if (existing.videoId === video.youtube_video_id) {
+        if (existing.youtubeId === video.youtube_video_id) {
           // Player already exists for this video. If detached, re-attach iframe cleanly without re-initializing!
           try {
             const iframe = existing.player?.getIframe?.();
@@ -185,28 +262,22 @@ export function useShortsPlayerPool(
           }
 
           if (index === activeIndexRef.current && existing.isReady) {
-            try {
-              existing.player?.playVideo?.();
-            } catch {
-              // ignore
-            }
+            safePlayV1(existing.player, index);
           }
           return;
         }
 
         // Different video assigned to this slot: tear down old player
-        try {
-          existing.player?.destroy();
-        } catch {
-          // ignore
-        }
-        poolRef.current.delete(index);
+        destroySlot(index);
       }
+
+      const currentToken = ++mountTokenRef.current;
+      recordTransition(index, 'LOADING');
 
       loadYouTubeIframeApi().then(() => {
         if (!containerEl || !document.body.contains(containerEl)) return;
 
-        // Double check if created concurrently
+        // Double check if created concurrently or invalidated by newer token
         if (poolRef.current.has(index)) return;
 
         containerEl.innerHTML = '';
@@ -215,6 +286,28 @@ export function useShortsPlayerPool(
         containerEl.appendChild(hostDiv);
 
         const isCurrentlyActive = index === activeIndexRef.current;
+
+        // Watchdog: detect stuck/unplayable Short within 3 seconds
+        let watchdogTimer: NodeJS.Timeout | null = null;
+
+        const entry: PlayerPoolEntry = {
+          player: null,
+          videoId: video.id,
+          youtubeId: video.youtube_video_id,
+          containerEl,
+          hostDiv,
+          isReady: false,
+          isPrimed: false,
+          hasError: false,
+          errorMessage: null,
+          state: 'LOADING',
+          stateTransitions: [],
+          watchdogTimer: null,
+          retriedOnce: false,
+          mountToken: currentToken,
+          timeToFirstFrameMs: null,
+          startTime: performance.now(),
+        };
 
         const player = new window.YT.Player(hostDiv, {
           videoId: video.youtube_video_id,
@@ -235,23 +328,46 @@ export function useShortsPlayerPool(
           },
           events: {
             onReady: (event: any) => {
-              const entry = poolRef.current.get(index);
-              if (entry) {
-                entry.isReady = true;
-              }
+              // Ensure this onReady belongs to current active token
+              if (entry.mountToken !== currentToken) return;
+
+              entry.isReady = true;
+              recordTransition(index, 'READY');
 
               if (index === activeIndexRef.current) {
-                if (hasUserGestureUnlockedRef.current && !isMutedRef.current) {
-                  event.target.unMute();
-                  event.target.setVolume(100);
-                } else {
-                  event.target.mute();
-                }
-                event.target.playVideo();
+                safePlayV1(event.target, index);
+
+                // Set watchdog timer for active video: if no PLAYING state within 2.5s, trigger recovery
+                if (watchdogTimer) clearTimeout(watchdogTimer);
+                watchdogTimer = setTimeout(() => {
+                  if (entry.mountToken !== currentToken) return;
+                  if (index !== activeIndexRef.current) return;
+
+                  const pState = entry.player?.getPlayerState?.();
+                  if (pState !== 1 /* PLAYING */) {
+                    console.warn(`[ShortsWatchdog] Short #${index} (${video.youtube_video_id}) watchdog timeout. Retrying once...`);
+                    recordTransition(index, 'ERROR', {
+                      watchdogTriggered: true,
+                      errorMessage: 'Watchdog timeout: player did not enter PLAYING within 2500ms',
+                    });
+
+                    if (!entry.retriedOnce) {
+                      entry.retriedOnce = true;
+                      try {
+                        entry.player?.playVideo?.();
+                      } catch {}
+                    } else {
+                      // Mark bad in DB and advance cleanly to next short without dead screen!
+                      reportUnplayableShort(video.id, 'watchdog_timeout_2500ms');
+                      onSkipErrorRef.current?.(index);
+                    }
+                  }
+                }, 2500);
+                entry.watchdogTimer = watchdogTimer;
               } else {
                 // Preload buffering: Mute and start buffering ahead of time
-                event.target.mute();
                 try {
+                  event.target.mute();
                   event.target.playVideo();
                 } catch {
                   // ignore
@@ -259,13 +375,27 @@ export function useShortsPlayerPool(
               }
             },
             onStateChange: (event: any) => {
+              if (entry.mountToken !== currentToken) return;
+
               if (event.data === window.YT.PlayerState.PLAYING) {
-                const entry = poolRef.current.get(index);
+                if (watchdogTimer) {
+                  clearTimeout(watchdogTimer);
+                  watchdogTimer = null;
+                }
+
+                if (entry.timeToFirstFrameMs === null) {
+                  entry.timeToFirstFrameMs = Math.round(performance.now() - entry.startTime);
+                }
+
+                recordTransition(index, 'PLAYING', {
+                  timeToFirstFrameMs: entry.timeToFirstFrameMs,
+                });
+
                 if (index === activeIndexRef.current) {
                   setPlayingIndices((prev) => ({ ...prev, [index]: true }));
                 } else {
                   // Primed upcoming video: now that first bytes/frame are buffered, pause quietly!
-                  if (entry && !entry.isPrimed) {
+                  if (!entry.isPrimed) {
                     entry.isPrimed = true;
                     try {
                       event.target.pauseVideo();
@@ -275,37 +405,68 @@ export function useShortsPlayerPool(
                     }
                   }
                 }
+              } else if (event.data === window.YT.PlayerState.PAUSED) {
+                recordTransition(index, 'PAUSED');
+              } else if (event.data === window.YT.PlayerState.BUFFERING) {
+                recordTransition(index, 'WAITING');
+              } else if (event.data === -1 /* UNSTARTED */ || event.data === 5 /* VIDEO_CUED */) {
+                // Autoplay policy or cue state recovery
+                if (index === activeIndexRef.current) {
+                  setTimeout(() => {
+                    if (index === activeIndexRef.current && entry.player) {
+                      try {
+                        entry.player.playVideo();
+                      } catch {}
+                    }
+                  }, 200);
+                }
               }
             },
             onError: (event: any) => {
-              const errMsg = `YouTube Error code ${event.data}`;
-              console.warn(
-                `[ShortsPlayer] YouTube error ${event.data} on video ${video.youtube_video_id} (index ${index}).`
-              );
-              const entry = poolRef.current.get(index);
-              if (entry) {
-                entry.hasError = true;
-                entry.errorMessage = errMsg;
+              if (entry.mountToken !== currentToken) return;
+              if (watchdogTimer) {
+                clearTimeout(watchdogTimer);
+                watchdogTimer = null;
               }
+
+              const errCode = event.data;
+              const errMsg = `YouTube Error ${errCode}: ${
+                errCode === 101 || errCode === 150
+                  ? 'Embedding disabled by owner'
+                  : errCode === 100
+                  ? 'Video not found or removed'
+                  : errCode === 2
+                  ? 'Invalid parameters'
+                  : 'Playback error'
+              }`;
+
+              console.warn(
+                `[ShortsPlayer] YouTube error ${errCode} on video ${video.youtube_video_id} (index ${index}).`
+              );
+
+              entry.hasError = true;
+              entry.errorMessage = errMsg;
+              recordTransition(index, 'ERROR', {
+                errorCode: errCode,
+                errorMessage: errMsg,
+              });
+
               setErrorMap((prev) => ({ ...prev, [index]: errMsg }));
+
+              // Report unplayable short to Supabase DB so it is permanently excluded
+              reportUnplayableShort(video.id, `youtube_error_${errCode}`);
+
+              // Notify parent for silent auto-skip to next short
               onSkipErrorRef.current?.(index);
             },
           },
         });
 
-        poolRef.current.set(index, {
-          player,
-          videoId: video.youtube_video_id,
-          containerEl,
-          hostDiv,
-          isReady: false,
-          isPrimed: false,
-          hasError: false,
-          errorMessage: null,
-        });
+        entry.player = player;
+        poolRef.current.set(index, entry);
       });
     },
-    [] // Stable callback! Never changes across rerenders or activeIndex changes!
+    [destroySlot, recordTransition, safePlayV1]
   );
 
   // Synchronize playback and audio when activeIndex, isMuted, or gesture unlock changes
@@ -315,13 +476,7 @@ export function useShortsPlayerPool(
 
       try {
         if (idx === activeIndex) {
-          if (hasUserGestureUnlocked && !isMuted) {
-            entry.player.unMute?.();
-            entry.player.setVolume?.(100);
-          } else {
-            entry.player.mute?.();
-          }
-          entry.player.playVideo?.();
+          safePlayV1(entry.player, idx);
 
           // If already playing in memory, reflect in state immediately
           if (entry.player.getPlayerState?.() === 1) {
@@ -344,17 +499,12 @@ export function useShortsPlayerPool(
       activeIndex + 1,
       activeIndex + 2,
     ]);
-    poolRef.current.forEach((entry, idx) => {
+    poolRef.current.forEach((_, idx) => {
       if (!keepSlots.has(idx)) {
-        try {
-          entry.player?.destroy();
-        } catch {
-          // ignore
-        }
-        poolRef.current.delete(idx);
+        destroySlot(idx);
       }
     });
-  }, [activeIndex, isMuted, hasUserGestureUnlocked]);
+  }, [activeIndex, isMuted, hasUserGestureUnlocked, destroySlot, safePlayV1]);
 
   // Handle tap gesture anywhere on the video
   const handleUserGesturePlayback = useCallback(() => {
@@ -385,15 +535,7 @@ export function useShortsPlayerPool(
   // Explicit retry action for V1
   const retryV1Player = useCallback(
     (index: number) => {
-      const entry = poolRef.current.get(index);
-      if (entry) {
-        try {
-          entry.player?.destroy();
-        } catch {
-          // ignore
-        }
-        poolRef.current.delete(index);
-      }
+      destroySlot(index);
       setErrorMap((prev) => {
         const copy = { ...prev };
         delete copy[index];
@@ -404,11 +546,12 @@ export function useShortsPlayerPool(
       if (!video) return;
 
       // Re-trigger attach
-      if (entry?.containerEl) {
-        attachPlayer(index, entry.containerEl);
+      const containerEl = document.querySelector(`[data-index="${index}"] .shorts-player-frame`) as HTMLDivElement;
+      if (containerEl) {
+        attachPlayer(index, containerEl);
       }
     },
-    [attachPlayer]
+    [attachPlayer, destroySlot]
   );
 
   // Heartbeat progress tracking timer (1 sec)
@@ -450,13 +593,20 @@ export function useShortsPlayerPool(
     return () => clearInterval(timer);
   }, [activeIndex]);
 
+  // Expose diagnostic log collection for debug overlay
+  const getDiagnosticLogs = useCallback((): ShortDiagnosticLog[] => {
+    return Array.from(diagnosticLogsRef.current.values());
+  }, []);
+
   return {
     attachPlayer,
     pauseAllV1Players,
     playingIndices,
     errorMap,
     progressMap,
+    statusMap,
     handleUserGesturePlayback,
     retryV1Player,
+    getDiagnosticLogs,
   };
 }

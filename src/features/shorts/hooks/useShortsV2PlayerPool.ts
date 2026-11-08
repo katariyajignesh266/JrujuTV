@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useShortsFeatureStore } from '../store/shortsStore';
-import { recordShortProgress } from '../api/shortsApi';
+import { recordShortProgress, reportUnplayableShort } from '../api/shortsApi';
 import { ShortVideo } from '../types';
 
 export type V2ReadinessState =
@@ -503,6 +503,9 @@ export function useShortsV2PlayerPool(
           }, 500);
           return;
         }
+
+        // Notify backend & mark unplayable if permanent
+        reportUnplayableShort(video.id, `v2_media_error_${code || 'unknown'}`);
 
         // Notify parent of fallback / skip
         onSkipErrorRef.current?.(index);
