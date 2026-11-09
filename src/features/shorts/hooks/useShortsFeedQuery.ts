@@ -67,6 +67,8 @@ export function useShortsFeedQuery(initialized: boolean) {
 
   const { activeIndex, unplayableVideoIds } = useShortsFeatureStore();
   const isFetchingRef = useRef(false);
+  const unplayableIdsRef = useRef<Set<string>>(unplayableVideoIds);
+  unplayableIdsRef.current = unplayableVideoIds;
 
   // Initial load
   const loadInitialFeed = useCallback(async () => {
@@ -76,7 +78,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoading(true);
       cursorRef.current = 0;
       const res = await fetchShortsFeed(seedRef.current, 0, PAGE_SIZE);
-      const cleaned = sanitizeAndDedupe(res.videos || [], [], unplayableVideoIds);
+      const cleaned = sanitizeAndDedupe(res.videos || [], [], unplayableIdsRef.current);
       setVideos(cleaned);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor ?? cleaned.length;
@@ -87,10 +89,12 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoading(false);
       isFetchingRef.current = false;
     }
-  }, [unplayableVideoIds]);
+  }, []);
 
   useEffect(() => {
-    loadInitialFeed();
+    if (initialized) {
+      loadInitialFeed();
+    }
   }, [loadInitialFeed, initialized]);
 
   // Load next page: cursor pagination with automatic seed-increment cycle restart
@@ -120,7 +124,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       }
 
       setVideos((prev) => {
-        const appended = sanitizeAndDedupe(incoming, prev, unplayableVideoIds);
+        const appended = sanitizeAndDedupe(incoming, prev, unplayableIdsRef.current);
         return [...prev, ...appended];
       });
 
@@ -131,7 +135,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       setLoadingMore(false);
       isFetchingRef.current = false;
     }
-  }, [loadingMore, unplayableVideoIds]);
+  }, [loadingMore]);
 
   // Lookahead prefetch: trigger when 5 items remain before reaching the end
   useEffect(() => {

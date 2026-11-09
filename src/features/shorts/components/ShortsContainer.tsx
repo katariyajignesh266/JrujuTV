@@ -158,7 +158,7 @@ export function ShortsContainer() {
       },
       {
         root: container,
-        threshold: 0.65,
+        threshold: 0.5,
       }
     );
 
@@ -191,6 +191,9 @@ export function ShortsContainer() {
         if (Math.abs(container.scrollTop - targetTop) > 2) {
           container.scrollTo({ top: targetTop, behavior: 'smooth' });
         }
+        if (targetIndex >= 0 && targetIndex < videos.length) {
+          setActiveIndex(targetIndex);
+        }
       }, 150);
     };
 
@@ -199,7 +202,7 @@ export function ShortsContainer() {
       container.removeEventListener('scroll', handleScrollSnapCheck);
       if (snapTimeout) clearTimeout(snapTimeout);
     };
-  }, []);
+  }, [videos.length, setActiveIndex]);
 
   // 3. Infinite Feed Sentinel: triggers loadMore before user reaches bottom
   useEffect(() => {
