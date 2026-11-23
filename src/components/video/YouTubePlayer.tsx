@@ -10,6 +10,7 @@ import {
   Minimize,
   Loader2,
 } from 'lucide-react';
+import { confirmedPlayback, pauseActivity, selectActivityVideo } from '@/lib/activity/childActivity';
 import { cn } from '@/lib/cn';
 import { useUIStore } from '@/store/uiStore';
 import { syncThemeColorMeta } from '@/hooks/useTheme';
@@ -64,6 +65,9 @@ export function YouTubePlayer({
   accessToken,
   startAt,
 }: YouTubePlayerProps) {
+  useEffect(() => { selectActivityVideo(videoId); }, [videoId]);
+  const titleRef = useRef(title);
+  titleRef.current = title;
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -264,7 +268,9 @@ export function YouTubePlayer({
           onStateChange: (event: any) => {
             if (!isMounted) return;
             // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+            if (event.data !== 1) pauseActivity(videoId, event.data === 0);
             if (event.data === 1) {
+              confirmedPlayback(videoId, titleRef.current);
               setIsPlaying(true);
               setIsBuffering(false);
               scheduleHideControls();
@@ -285,6 +291,7 @@ export function YouTubePlayer({
           },
           onError: (event: any) => {
             if (!isMounted) return;
+            pauseActivity(videoId);
             console.warn('[YouTubePlayer] YT.Player error event:', event?.data);
             setIsBuffering(false);
             setPlayerError(true);
@@ -303,6 +310,7 @@ export function YouTubePlayer({
 
     return () => {
       isMounted = false;
+      pauseActivity(videoId);
       flushHeartbeat();
       if (playerRef.current) {
         try {

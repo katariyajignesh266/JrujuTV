@@ -4,6 +4,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { selectActivityVideo } from '@/lib/activity/childActivity';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import { useShortsFeatureStore } from '../store/shortsStore';
@@ -126,6 +127,9 @@ export function ShortsContainer() {
 
   // Determine active item engine
   const currentVideo = videos[activeIndex];
+  useEffect(() => {
+    if (currentVideo) selectActivityVideo(currentVideo.youtube_video_id || currentVideo.id);
+  }, [currentVideo]);
   const isCurrentActiveV2 = isVideoV2(currentVideo, activeIndex);
 
   // Mutual exclusion: ensure V1 and V2 never play simultaneously

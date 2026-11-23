@@ -1,5 +1,6 @@
 // src/store/authStore.ts
 
+import { logoutActivity } from '@/lib/activity/childActivity';
 import { create } from 'zustand';
 import type { Role, User } from '@/types/auth';
 import { createClient } from '@/lib/supabase/client';
@@ -314,6 +315,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
 
     logout: async () => {
       set({ loading: true });
+      await logoutActivity();
       await supabase.auth.signOut();
       set({
         role: 'guest',

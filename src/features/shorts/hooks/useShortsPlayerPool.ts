@@ -1,6 +1,7 @@
 // src/features/shorts/hooks/useShortsPlayerPool.ts
 'use client';
 
+import { confirmedPlayback, pauseActivity } from '@/lib/activity/childActivity';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useShortsFeatureStore } from '../store/shortsStore';
 import { recordShortProgress, reportUnplayableShort } from '../api/shortsApi';
@@ -203,7 +204,8 @@ export function useShortsPlayerPool(
   const destroySlot = useCallback((index: number) => {
     const existing = poolRef.current.get(index);
     if (existing) {
-      if (existing.watchdogTimer) clearTimeout(existing.watchdogTimer);
+      pauseActivity(existing.youtubeId || existing.videoId);
+        if (existing.watchdogTimer) clearTimeout(existing.watchdogTimer);
       try {
         existing.player?.destroy();
       } catch {
@@ -444,6 +446,7 @@ export function useShortsPlayerPool(
             onStateChange: (event: any) => {
               if (mountTokensRef.current.get(index) !== currentToken) return;
 
+              if (event.data !== window.YT.PlayerState.PLAYING) pauseActivity(video.youtube_video_id || video.id);
               if (event.data === window.YT.PlayerState.PLAYING) {
                 if (entry.watchdogTimer) {
                   clearTimeout(entry.watchdogTimer);
@@ -459,6 +462,7 @@ export function useShortsPlayerPool(
                 });
 
                 if (index === activeIndexRef.current) {
+                  confirmedPlayback(video.youtube_video_id || video.id, video.title);
                   setPlayingIndices((prev) => ({ ...prev, [index]: true }));
 
                   // Restore volume if session audio is unlocked

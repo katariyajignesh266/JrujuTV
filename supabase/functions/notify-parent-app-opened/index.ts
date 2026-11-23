@@ -129,9 +129,9 @@ serve(async (req) => {
     // ── Build notification payload ────────────────────────────────────────
     const notificationPayload = JSON.stringify({
       title: 'JruJu TV',
-      body: `${childName} started watching 📺`,
+      body: `${childName} opened JruJu TV`,
       icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-192x192.png',
+      badge: '/icons/notification-badge-v1.png',
       data: {
         child_id: user.id,
         url: '/profile',
@@ -162,7 +162,7 @@ serve(async (req) => {
             staleIds.push(sub.id)
             console.log(`[notify-parent] Stale subscription ${sub.id} (${statusCode}) — will delete`)
           } else {
-            console.error(`[notify-parent] Push failed for sub ${sub.id}:`, err?.message ?? err)
+            console.error('[notify-parent] Push failed', statusCode)
           }
         }
       })

@@ -37,6 +37,9 @@ scratch/
 # playwright mcp logs
 .playwright-mcp/
 
+# temporary activity checks
+.activity-local-check/
+
 # env secrets
 .env
 .env.*

@@ -1,6 +1,7 @@
 // src/features/shorts/hooks/useShortsV2PlayerPool.ts
 'use client';
 
+import { confirmedPlayback, pauseActivity } from '@/lib/activity/childActivity';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useShortsFeatureStore } from '../store/shortsStore';
 import { recordShortProgress, reportUnplayableShort } from '../api/shortsApi';
@@ -184,6 +185,8 @@ export function useShortsV2PlayerPool(
   const teardownElement = useCallback((index: number) => {
     const el = videoElementsRef.current.get(index);
     if (el) {
+      const video = videosRef.current[index];
+      if (video) pauseActivity(video.youtube_video_id || video.id);
       cleanupCountRef.current += 1;
       try {
         el.pause();
@@ -416,6 +419,8 @@ export function useShortsV2PlayerPool(
       };
 
       const handlePlaying = () => {
+        if (index !== activeIndexRef.current || videoElementsRef.current.get(index) !== el || !el?.isConnected) return;
+        confirmedPlayback(video.youtube_video_id || video.id, video.title);
         const curr = elementStatesRef.current.get(index);
         if (curr && el) {
           curr.isPlaying = true;
@@ -454,6 +459,7 @@ export function useShortsV2PlayerPool(
       };
 
       const handleWaiting = () => {
+        if (videoElementsRef.current.get(index) === el) pauseActivity(video.youtube_video_id || video.id);
         const curr = elementStatesRef.current.get(index);
         if (curr && curr.status === 'PLAYING') {
           curr.bufferingEvents += 1;
@@ -464,6 +470,7 @@ export function useShortsV2PlayerPool(
       };
 
       const handlePause = () => {
+        if (videoElementsRef.current.get(index) === el) pauseActivity(video.youtube_video_id || video.id);
         const curr = elementStatesRef.current.get(index);
         if (curr) {
           curr.isPlaying = false;
@@ -476,6 +483,7 @@ export function useShortsV2PlayerPool(
       };
 
       const handleError = () => {
+        if (videoElementsRef.current.get(index) === el) pauseActivity(video.youtube_video_id || video.id);
         const curr = elementStatesRef.current.get(index);
         const mediaError = el?.error;
         const code = mediaError?.code ?? null;

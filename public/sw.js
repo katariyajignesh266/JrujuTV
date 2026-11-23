@@ -12,7 +12,7 @@
  * To trigger a cache refresh on next deploy: bump CACHE_VERSION below.
  */
 
-const CACHE_VERSION = 'jruju-shell-v4';
+const CACHE_VERSION = 'jruju-shell-v5';
 const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
 /**
@@ -25,6 +25,7 @@ const SHELL_URLS = [
   '/manifest.webmanifest',
   '/favicon.ico',
   '/icons/icon-192x192.png',
+  '/icons/notification-badge-v1.png',
   '/icons/icon-512x512.png',
   '/icons/icon-maskable-512x512.png',
   '/icons/apple-touch-icon.png',
@@ -48,7 +49,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames
-          .filter((name) => isDev || name !== CACHE_VERSION)
+          .filter((name) => name.startsWith('jruju-shell-') && (isDev || (name !== CACHE_VERSION && name !== CACHE_VERSION + '-displayed')))
           .map((name) => {
             console.log(`[SW] Deleting old cache: ${name}`);
             return caches.delete(name);
@@ -235,9 +236,9 @@ function offlineFallbackHTML() {
 self.addEventListener('push', (event) => {
   let payload = {
     title: 'JruJu TV',
-    body: 'Your child started watching 📺',
+    body: 'New JruJu TV activity',
     icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-192x192.png',
+    badge: '/icons/notification-badge-v1.png',
     data: { url: '/profile', child_id: null },
   };
 
@@ -249,18 +250,31 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
+  event.waitUntil((async () => {
+    const eventId = payload.data?.event_id;
+    // Remember displayed events even after dismissal. The cache version bounds retention on upgrade.
+    const key = typeof eventId === 'string' && /^[0-9a-f-]{36}$/i.test(eventId)
+      ? new URL('/__activity_displayed/' + eventId, self.location.origin).href : null;
+    const receipts = key ? await caches.open(CACHE_VERSION + '-displayed') : null;
+    if (receipts && await receipts.match(key)) return;
+    await self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: payload.icon,
       badge: payload.badge,
       data: payload.data,
       vibrate: [200, 100, 200],
-      // Replace any previous "child opened" notification so they don't stack
-      tag: 'jruju-child-opened',
+      // Retries replace only the same event.
+      tag: payload.data?.event_id || 'jruju-child-opened',
+      timestamp: Date.parse(payload.data?.occurred_at) || Date.now(),
+      renotify: false,
       requireInteraction: false,
-    })
-  );
+    });
+    if (receipts) {
+      await receipts.put(key,new Response('1'));
+      const keys = await receipts.keys();
+      await Promise.all(keys.slice(0,Math.max(0,keys.length-512)).map(k => receipts.delete(k)));
+    }
+  })());
 });
 
 /**

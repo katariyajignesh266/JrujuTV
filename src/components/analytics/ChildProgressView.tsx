@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { formatWatchDuration, formatRelativeTime } from '@/lib/formatters';
+import { DailyActivityCalendar } from './DailyActivityCalendar';
 import { ChannelBarChart } from './ChannelBarChart';
 import { EmptyState } from '@/components/shared/EmptyState';
 
@@ -289,6 +290,8 @@ export function ChildProgressView({ childId, viewerRole, accessToken }: ChildPro
           loading={summaryLoading}
         />
       </div>
+
+      <DailyActivityCalendar key={childId} childId={childId} accessToken={accessToken} />
 
       {/* ── Top Channels Graph ────────────────────────────────────────────── */}
       <div>
