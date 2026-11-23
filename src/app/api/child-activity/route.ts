@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { childActivity } from '../../../../supabase/functions/_shared/childActivity';
 
 export async function POST(request: Request) {
   const received = new Date().toISOString();
@@ -13,10 +12,10 @@ export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !apiKey || !serviceKey) return Response.json({code:'SERVICE_CONFIGURATION'}, {status:503});
+  if (!url || !apiKey) return Response.json({code:'SERVICE_CONFIGURATION'}, {status:503});
 
   try {
-    if (body.kind !== 'day') {
+    if (body.kind !== 'day' || !serviceKey) {
       // The Edge writer also dispatches push immediately. A gateway-confirmed missing
       // function can safely fall back to the same idempotent Postgres writer.
       const edge = await fetch(url + '/functions/v1/child-activity', {
@@ -30,6 +29,8 @@ export async function POST(request: Request) {
         return Response.json(result, {status:edge.status, headers:retryAfter ? {'Retry-After':retryAfter} : {}});
       }
     }
+    if (!serviceKey) return Response.json({code:'ACTIVITY_ROUTE_MISSING'}, {status:503});
+    const { childActivity } = await import('../../../../supabase/functions/_shared/childActivity');
     const admin = createClient(url,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
     return await childActivity(admin,authorization.slice(7),body,received);
   } catch {

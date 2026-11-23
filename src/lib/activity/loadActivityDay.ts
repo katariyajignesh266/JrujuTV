@@ -50,7 +50,11 @@ export async function loadActivityDay(childId: string, date: string, token: stri
       404:'The activity service is unavailable.',
       503:'The activity service is temporarily unavailable.'
     };
-    throw new ActivityLoadError('http',response.status,messages[response.status] || 'Activity could not be loaded.');
+    const code = (await response.json().catch(() => null))?.code;
+    const knownCodes = ['SERVICE_CONFIGURATION','ACTIVITY_ROUTE_MISSING','DAY_QUERY_FAILED',
+      'WATCH_LOOKUP_FAILED','FAMILY_LOOKUP_FAILED','INVALID_DAY_RESPONSE','ACTIVITY_SERVICE_UNAVAILABLE'];
+    throw new ActivityLoadError(knownCodes.includes(code) ? code : 'http',response.status,
+      messages[response.status] || 'Activity could not be loaded.');
   }
   const value: unknown = await response.json().catch(() => null);
   if (!isDay(value)) throw new ActivityLoadError('invalid_response',response.status,'The activity service returned an unreadable timeline.');

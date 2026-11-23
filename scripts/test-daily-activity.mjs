@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { loadActivityDay } from '../src/lib/activity/loadActivityDay.ts';
 import { childActivity } from '../supabase/functions/_shared/childActivity.ts';
 import { checkActivityRoute } from './check-activity-route.mjs';
+import { POST } from '../src/app/api/child-activity/route.ts';
 
 const calls = [];
 let status = 404;
@@ -32,6 +33,10 @@ try {
   payload = {coverage:'full',website:0,playback:0,visits:[],has_watch_history:true};
   assert.equal((await load('2026-11-22')).has_watch_history,true);
   assert.equal(calls.at(-1).body.date,'2026-11-22');
+  status = 503;
+  payload = {code:'SERVICE_CONFIGURATION'};
+  await assert.rejects(load('2026-11-23'), {reason:'SERVICE_CONFIGURATION',status:503});
+  status = 200;
   payload = {...payload,visits:[{}]};
   await assert.rejects(load('2026-11-22'), {reason:'invalid_response'});
   status = 403;
@@ -71,3 +76,34 @@ assert.equal(details.visits.length,0);
 linked=false;
 assert.equal((await childActivity(admin,'fixture',day,new Date().toISOString())).status,403);
 console.log('PASS: authorized historical playback and unrelated-parent denial with missing visit schema.');
+
+// Render can reach the authenticated Edge Function with just its public Supabase config.
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'fixture-public';
+delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+const request = body => new Request('http://localhost/api/child-activity',{
+  method:'POST',headers:{authorization:'Bearer fixture-viewer'},body:JSON.stringify(body)
+});
+try {
+  for (const [body, expectedStatus, expectedData] of [
+    [day,200,{visits:[],website:0,playback:0,coverage:'full'}],
+    [day,403,{}],
+    [{kind:'join'},200,{visit:'fixture-visit'}]
+  ]) {
+    let forwarded = false;
+    globalThis.fetch = async (url,options) => {
+      assert.equal(url,base+'/functions/v1/child-activity');
+      assert.equal(options.headers.authorization,'Bearer fixture-viewer');
+      assert.equal(options.headers.apikey,'fixture-public');
+      assert.deepEqual(JSON.parse(options.body),body);
+      forwarded = true;
+      return Response.json(expectedData,{status:expectedStatus});
+    };
+    const response = await POST(request(body));
+    assert.equal(response.status,expectedStatus);
+    assert.deepEqual(await response.json(),expectedData);
+    assert.equal(forwarded,true);
+  }
+  console.log('PASS: Render route reads and writes without a service key and preserves parent denial.');
+} finally {
+  globalThis.fetch = originalFetch;
+}
