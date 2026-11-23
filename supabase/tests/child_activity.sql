@@ -24,6 +24,18 @@ begin
  perform activity_record(child,browser,second_doc,'depart',gen_random_uuid(),t,null,null,null,null,t);
  if (select count(*) from child_activity_events where visit_id=visit and kind='close')<>1 then raise exception 'duplicate close'; end if;
 
+ -- Verify the recording RPC's actual result through the same day RPC for both viewers.
+ result:=child_activity_day(parent,child,(t at time zone 'Asia/Kolkata')::date);
+ if result is distinct from child_activity_day(child,child,(t at time zone 'Asia/Kolkata')::date)
+ or result#>>'{visits,0,id}' is distinct from visit::text
+ or result#>>'{visits,0,starts,0,title}' is distinct from 'Fixture'
+ or jsonb_array_length(result#>'{visits,0,starts}')<>1
+ or result#>>'{visits,0,closed}' is null then raise exception 'fresh visit failed round trip'; end if;
+ if (select count(*) from child_visits where child_id=child)<>1 then raise exception 'read created visit'; end if;
+ if ('2026-11-23'::date::timestamp at time zone 'Asia/Kolkata') <> '2026-11-22 18:30Z'::timestamptz or
+ ('2026-11-24'::date::timestamp at time zone 'Asia/Kolkata') <> '2026-11-23 18:30Z'::timestamptz
+ then raise exception 'local midnight boundary'; end if;
+
  -- Midnight crossing, overlapping devices, and three non-overlapping contributions of 30, 60, 45 minutes.
  for item in select * from (values(-10,30),(5,18),(60,120),(160,205)) minutes(lo,hi) loop
  insert into child_visits(child_id,browser_id,opened_at,last_seen,due_at,closed_at)

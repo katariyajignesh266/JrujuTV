@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const zone = 'Asia/Kolkata';
+import { ActivityLoadError, loadActivityDay, reportingZone as zone, type ActivityDay } from '@/lib/activity/loadActivityDay';
 const dayKey = (d: Date) => new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
 const stamp = (s: string) => new Intl.DateTimeFormat('en-IN',{timeZone:zone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date(s));
 const duration = (s: number) => {
@@ -12,15 +12,11 @@ const duration = (s: number) => {
   return minutes >= 60 ? Math.floor(minutes/60)+' hr'+(minutes%60 ? ' '+minutes%60+' min' : '') :
     minutes ? minutes+' min' : seconds+' sec';
 };
-type Visit = { id:string; opened:string; closed:string|null; inferred:boolean; seconds:number;
-  starts:{id:string;at:string;title:string|null}[] };
-type Day = { coverage:'unavailable'|'partial'|'full'; visits:Visit[]; website:number; playback:number };
-
 export function DailyActivityCalendar({childId,accessToken}:{childId:string;accessToken:string}) {
   const today = dayKey(new Date());
   const [date,setDate] = useState(today);
   const [month,setMonth] = useState(today.slice(0,7));
-  const [result,setResult] = useState<{key:string;value:Day}|null>(null);
+  const [result,setResult] = useState<{key:string;value:ActivityDay}|null>(null);
   const [error,setError] = useState('');
   const [retry,setRetry] = useState(0);
   const key = childId+'/'+date;
@@ -28,21 +24,19 @@ export function DailyActivityCalendar({childId,accessToken}:{childId:string;acce
     const controller = new AbortController();
     let busy = false;
     setError('');
+    setResult(null);
     async function refresh() {
       if (busy) return;
       busy = true;
       try {
-        const res = await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/child-activity',{
-          method:'POST',signal:controller.signal,cache:'no-store',headers:{
-            'Content-Type':'application/json',apikey:process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-            Authorization:'Bearer '+accessToken
-          },body:JSON.stringify({kind:'day',child_id:childId,date})
-        });
-        if (!res.ok) throw new Error();
-        const value:Day = await res.json();
+        const value = await loadActivityDay(childId, date, accessToken, controller.signal);
         if (!controller.signal.aborted) { setResult({key,value}); setError(''); }
-      } catch {
-        if (!controller.signal.aborted) setError('Activity could not be loaded.');
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        const failure = cause instanceof ActivityLoadError ? cause :
+          new ActivityLoadError('network', 0, 'Could not reach the activity service. Check your connection.');
+        console.warn('[DailyActivity]', failure.reason, failure.status);
+        setError(failure.message);
       } finally { busy=false; }
     }
     void refresh();
@@ -77,18 +71,22 @@ export function DailyActivityCalendar({childId,accessToken}:{childId:string;acce
       })}
     </div>
     <p className="text-xs text-content-secondary">{date} · India Standard Time</p>
-    {error ? <p role="alert">{error} <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Retry</button></p> :
+    {error ? <p role="alert">{error} <button type="button" className="underline" onClick={()=>{setError(''); setResult(null); setRetry(n=>n+1);}}>Retry</button></p> :
       !data ? <p role="status">Loading activity…</p> : <>
-         {data.coverage==='unavailable' && <p className="text-sm">Visit tracking was unavailable on this date. Earlier watch records are available in Watch History.</p>}
-        {data.coverage==='partial' && <p className="text-sm">Visit tracking began during this day.</p>}
-        {data.coverage!=='unavailable' && !data.visits.length && <p className="text-sm">No visits recorded for this date.</p>}
+        {data.tracking_setup_required && <p className="text-sm">Visit tracking is awaiting database setup.</p>}
+        {data.coverage === 'partial' && <p className="text-sm">Visit tracking began during this day.</p>}
+        {!data.visits.length && <p className="text-sm">
+          {data.has_watch_history
+            ? 'Playback was recorded, but visit details are unavailable for this date.'
+            : data.coverage === 'unavailable' ? 'Visit tracking was unavailable on this date.' : 'No visits recorded for this date.'}
+        </p>}
         {data.visits.map(v=><article key={v.id} className="border-t border-border pt-3 space-y-1 text-sm">
           <p><strong>Opened</strong> · <time dateTime={v.opened}>{stamp(v.opened)}</time></p>
           {v.starts.map(s=><p key={s.id}>Started watching · <time dateTime={s.at}>{stamp(s.at)}</time>{s.title && ' · '+s.title}</p>)}
           <p>{v.closed ? <>{v.inferred?'Closed (estimated, last seen)':'Closed'} · <time dateTime={v.closed}>{stamp(v.closed)}</time></>:'Still open'}</p>
           <p>Time on website · {duration(v.seconds)}</p>
         </article>)}
-        {data.coverage!=='unavailable' && <div className="border-t border-border pt-3 text-sm">
+        {(data.visits.length > 0 || (data.coverage!=='unavailable' && !data.has_watch_history)) && <div className="border-t border-border pt-3 text-sm">
           <strong>Daily total · Time on website · {duration(data.website)}</strong>
           <p>Playback time · {duration(data.playback)}</p>
         </div>}

@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import { loadActivityDay } from '../src/lib/activity/loadActivityDay.ts';
+import { childActivity } from '../supabase/functions/_shared/childActivity.ts';
+import { checkActivityRoute } from './check-activity-route.mjs';
+
+const calls = [];
+let status = 404;
+let payload = {code:'NOT_FOUND',message:'Requested function was not found'};
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (url, options) => {
+  calls.push({method:options.method,path:new URL(url,'http://localhost:3000').pathname,body:JSON.parse(options.body)});
+  return Response.json(payload,{status});
+};
+const base = 'https://fixture.invalid';
+process.env.NEXT_PUBLIC_SUPABASE_URL = base;
+const load = (date) => loadActivityDay('selected-child',date,'fixture',new AbortController().signal);
+try {
+  await assert.rejects(checkActivityRoute(base), /HTTP 404/);
+  await assert.rejects(load('2026-11-23'), {status:404});
+  status = 401;
+  payload = {code:'AUTH_REQUIRED'};
+  await checkActivityRoute(base);
+  status = 200;
+  payload = {coverage:'full',website:120,playback:30,visits:[{
+    id:'visit',opened:'2026-11-22T18:30:00Z',closed:'2026-11-22T18:32:00Z',seconds:120,inferred:true,
+    starts:[{id:'start',title:'Fixture title',at:'2026-11-22T18:31:00Z'}]
+  }]};
+  assert.deepEqual(await load('2026-11-23'),payload);
+  assert.deepEqual(calls[1],calls[3]);
+  assert.deepEqual(calls[3],{method:'POST',path:'/api/child-activity',
+    body:{kind:'day',child_id:'selected-child',date:'2026-11-23',timezone:'Asia/Kolkata'}});
+  payload = {coverage:'full',website:0,playback:0,visits:[],has_watch_history:true};
+  assert.equal((await load('2026-11-22')).has_watch_history,true);
+  assert.equal(calls.at(-1).body.date,'2026-11-22');
+  payload = {...payload,visits:[{}]};
+  await assert.rejects(load('2026-11-22'), {reason:'invalid_response'});
+  status = 403;
+  await assert.rejects(load('2026-11-22'),{status:403});
+  console.log('PASS: missing deployed route, fresh successful retry, date/zone, timeline, historical gap, invalid response and forbidden read.');
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+// Exercise the shared server path used by localhost before migration 023 is installed.
+const child = '00000000-0000-4000-8000-000000000001';
+let linked = true;
+const admin = {
+  auth:{getUser:async()=>({data:{user:{id:'fixture-parent'}}})},
+  rpc:async()=>({error:{code:'PGRST202'}}),
+  from(table) {
+    const filters = {};
+    return { select(){return this;}, eq(key,value){filters[key]=value;return this;},
+      limit:async()=>({error:{code:'PGRST205'}}),
+      async maybeSingle(){
+        assert.equal(filters.parent_id,'fixture-parent');
+        if(table==='children') return {data: linked && filters.id===child ? {id:child} : null};
+        assert.equal(table,'child_watch_daily');
+        assert.equal(filters.child_id,child);
+        return {data:{seconds_watched:900}};
+      }
+    };
+  }
+};
+const day = {kind:'day',child_id:child,date:'2026-11-23',timezone:'Asia/Kolkata'};
+const legacy = await childActivity(admin,'fixture',day,new Date().toISOString());
+assert.equal(legacy.status,200);
+const details = await legacy.json();
+assert.equal(details.tracking_setup_required,true);
+assert.equal(details.has_watch_history,true);
+assert.equal(details.visits.length,0);
+linked=false;
+assert.equal((await childActivity(admin,'fixture',day,new Date().toISOString())).status,403);
+console.log('PASS: authorized historical playback and unrelated-parent denial with missing visit schema.');

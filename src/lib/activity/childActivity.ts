@@ -19,6 +19,7 @@ let running: Promise<void> | undefined;
 let playing: { video: string; id: string; since: number } | undefined;
 let selected: { video: string; id: string } | undefined;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryAfter = 0;
 let departing = false;
 let firstDocument = true;
 
@@ -35,16 +36,15 @@ function keys(child: string): Entry[] {
 }
 
 async function send(s: Signal, token: string) {
-  return fetch(process.env.NEXT_PUBLIC_SUPABASE_URL + '/functions/v1/child-activity', {
+  return fetch('/api/child-activity', {
     method: 'POST', keepalive: true,
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token,
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify(s)
   });
 }
 
 function drain() {
-  if (running || !identity) return running;
+  if (running || !identity || Date.now() < retryAfter) return running;
   const owner = identity.child;
   let retry = false;
   const work = async () => {
@@ -53,7 +53,12 @@ function drain() {
       if (!entry) break;
       const res = await send(entry.signal, identity.token);
       if (res.status === 400) { localStorage.removeItem(entry.key); continue; }
-      if (!res.ok) { retry = true; break; }
+      if (!res.ok) {
+        const seconds = Number(res.headers.get('Retry-After'));
+        if (seconds > 0) retryAfter = Date.now() + Math.min(seconds, 300) * 1000;
+        retry = true;
+        break;
+      }
       const result = await res.json();
       if (result.visit && entry.signal.document === doc) joined = !result.closed;
       localStorage.removeItem(entry.key);
@@ -71,7 +76,7 @@ function drain() {
       if (!identity) return;
       if (retry) {
         clearTimeout(retryTimer);
-        retryTimer = setTimeout(drain, 3000);
+        retryTimer = setTimeout(drain, Math.max(3000, retryAfter - Date.now()));
       } else if (keys(identity.child).length) void drain();
     });
   return running;

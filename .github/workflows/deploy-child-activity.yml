@@ -1,0 +1,37 @@
+name: Deploy child activity backend
+on: workflow_dispatch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      PGDATABASE: postgres
+      PGHOST: ${{ secrets.SUPABASE_DB_HOST }}
+      PGUSER: ${{ secrets.SUPABASE_DB_USER }}
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGSSLMODE: require
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Prepare the activity schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${PROJECT_REF:?}" "${PGHOST:?}" "${PGUSER:?}" "${PGPASSWORD:?}"
+          [[ "$PROJECT_REF" == liortxbcrqjqborqqchh ]]
+          [[ "$PGHOST" == "db.$PROJECT_REF.supabase.co" || ( "$PGHOST" == *.pooler.supabase.com && "$PGUSER" == "postgres.$PROJECT_REF" ) ]]
+          if [[ "$(psql -XAt -v ON_ERROR_STOP=1 -c "select to_regclass('public.child_visits') is null")" == t ]]; then
+            psql -X --single-transaction -v ON_ERROR_STOP=1 -f supabase/migrations/023_child_activity.sql
+          fi
+          psql -X --single-transaction -v ON_ERROR_STOP=1 -f supabase/migrations/024_fix_activity_sweep.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/child_activity.sql
+      - name: Deploy the configured handler
+        run: supabase functions deploy child-activity --project-ref "$PROJECT_REF" --use-api
+      - name: Verify the browser-facing route
+        run: node scripts/check-activity-route.mjs "https://$PROJECT_REF.supabase.co"
