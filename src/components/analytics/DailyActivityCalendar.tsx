@@ -1,11 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, LogIn, LogOut, CirclePlay, Clock } from 'lucide-react';
 
 import { ActivityLoadError, loadActivityDay, reportingZone as zone, type ActivityDay } from '@/lib/activity/loadActivityDay';
+import { ActivityVideoCard } from './ActivityVideoCard';
+
 const dayKey = (d: Date) => new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
-const stamp = (s: string) => new Intl.DateTimeFormat('en-IN',{timeZone:zone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date(s));
+const clock = new Intl.DateTimeFormat('en-US',{timeZone:zone,hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
+const eventStyles = {
+  open: [LogIn, 'text-emerald-800 dark:text-emerald-300'],
+  start: [CirclePlay, 'text-blue-800 dark:text-blue-300'],
+  close: [LogOut, 'text-violet-800 dark:text-violet-300'],
+} as const;
+function EventLabel({kind,label,at,date}:{kind:keyof typeof eventStyles;label:string;at:string;date:string}) {
+  const [Icon,color] = eventStyles[kind];
+  const instant = new Date(at);
+  const eventDate = dayKey(instant);
+  return <p className={'flex flex-wrap items-center gap-x-1.5 text-sm ' + color}>
+    <Icon size={15} aria-hidden /><strong>{label}</strong>
+    <time className="text-content-secondary" dateTime={at}>{eventDate !== date && eventDate + ' · '}{clock.format(instant)}</time>
+  </p>;
+}
 const duration = (s: number) => {
   const seconds = Math.max(0,Math.floor(s));
   const minutes = Math.floor(seconds/60);
@@ -80,16 +96,31 @@ export function DailyActivityCalendar({childId,accessToken}:{childId:string;acce
             ? 'Playback was recorded, but visit details are unavailable for this date.'
             : data.coverage === 'unavailable' ? 'Visit tracking was unavailable on this date.' : 'No visits recorded for this date.'}
         </p>}
-        {data.visits.map(v=><article key={v.id} className="border-t border-border pt-3 space-y-1 text-sm">
-          <p><strong>Opened</strong> · <time dateTime={v.opened}>{stamp(v.opened)}</time></p>
-          {v.starts.map(s=><p key={s.id}>Started watching · <time dateTime={s.at}>{stamp(s.at)}</time>{s.title && ' · '+s.title}</p>)}
-          <p>{v.closed ? <>{v.inferred?'Closed (estimated, last seen)':'Closed'} · <time dateTime={v.closed}>{stamp(v.closed)}</time></>:'Still open'}</p>
-          <p>Time on website · {duration(v.seconds)}</p>
+        {data.visits.map(v => <article key={v.id} aria-label="Visit" className="space-y-3 rounded-xl border border-border p-3 text-sm">
+          <EventLabel kind="open" label="Opened" at={v.opened} date={date} />
+          {v.starts.map(start => <div key={start.id} className="space-y-1.5">
+            <EventLabel kind="start" label="Started watching" at={start.at} date={date} />
+            <ActivityVideoCard occurrence={start} />
+          </div>)}
+          {v.closed ? <EventLabel kind="close" label={v.inferred ? 'Closed (estimated)' : 'Closed'} at={v.closed} date={date} /> :
+            <p className="text-content-secondary">Still open</p>}
+          <span className="inline-flex flex-wrap items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-1 text-xs text-content-secondary">
+            <Clock size={13} /> Time on website · {duration(v.seconds)}
+          </span>
         </article>)}
-        {(data.visits.length > 0 || (data.coverage!=='unavailable' && !data.has_watch_history)) && <div className="border-t border-border pt-3 text-sm">
-          <strong>Daily total · Time on website · {duration(data.website)}</strong>
-          <p>Playback time · {duration(data.playback)}</p>
-        </div>}
+        {data.history?.map(row => <div key={row.id} className="space-y-1.5">
+          <EventLabel kind="start" label="Last watched" at={row.at} date={date} />
+          <ActivityVideoCard occurrence={row} />
+        </div>)}
+        <dl className="grid grid-cols-2 gap-2 border-t border-border pt-3">
+          {[
+            ['Time on website', !data.visits.length && (data.has_watch_history || data.coverage !== 'full') ? 'Unavailable' : duration(data.website)],
+            ['Playback time', duration(data.playback)]
+          ].map(([label,value]) => <div key={label} className="rounded-xl bg-surface-secondary p-2.5">
+            <dt className="text-xs text-content-secondary">{label}</dt>
+            <dd className="font-semibold text-content-primary">{value}</dd>
+          </div>)}
+        </dl>
       </>}
   </section>;
 }

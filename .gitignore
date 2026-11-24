@@ -39,6 +39,7 @@ scratch/
 
 # temporary activity checks
 .activity-local-check/
+.qa-activity-local/
 
 # env secrets
 .env

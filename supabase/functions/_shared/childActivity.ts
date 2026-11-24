@@ -3,6 +3,89 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 const reply = (body: object, status = 200) => Response.json(body, {status})
 
+// Enrich only the occurrences already authorized by child_activity_day.
+type Start = { id: string; at: string; title: string | null; card?: object | null }
+type DayRows = { coverage?:string; tracking_setup_required?:boolean; website?:number; playback?:number; visits: { starts: Start[] }[]; has_watch_history?: boolean; history?: object[] }
+
+async function addDayCards(admin: SupabaseClient, viewer: string, child: string, date: string, day: DayRows) {
+  const starts = day.visits.flatMap(visit => visit.starts)
+  if (!starts.length && day.visits.length) return
+  let parent = viewer
+  if (viewer === child) {
+    const {data} = await admin.from('children').select('parent_id').eq('id',child).single().throwOnError()
+    parent = data!.parent_id
+  }
+  if (!day.visits.length) {
+    const from = new Date(date + 'T00:00:00+05:30')
+    const until = new Date(from.getTime() + 86400000)
+    day.history = []
+    // Only the last watch of a video is recoverable on pre-tracking days.
+    for (let offset = 0; ; offset += 200) {
+      const {data} = await admin.from('watch_sessions')
+        .select('id,last_watched_at,progress_percent,absolute_position,videos(id,youtube_video_id,title,thumbnail_url,channels(title,parent_id))')
+        .eq('child_id', child).eq('parent_id', parent)
+        .gte('last_watched_at', from.toISOString()).lt('last_watched_at', until.toISOString())
+        .order('last_watched_at').order('id').range(offset, offset + 199).throwOnError()
+      for (const row of data ?? []) {
+        const video = row.videos as unknown as CatalogVideo | null
+        day.history.push({id:row.id, at:row.last_watched_at, title:null,
+          card:video?.channels?.parent_id === parent ? makeCard(video, row) : null})
+      }
+      if ((data?.length ?? 0) < 200) break
+    }
+    day.has_watch_history ||= day.history.length > 0
+    return
+  }
+
+  const references = new Map<string,string>()
+  const videos = new Map<string,CatalogVideo>()
+  const progress = new Map<string,Progress>()
+  for (const ids of batches(starts.map(start => start.id))) {
+    const {data} = await admin.from('child_activity_events').select('id,video').in('id', ids).throwOnError()
+    for (const event of data ?? []) references.set(event.id,event.video)
+  }
+  const keys = [...new Set(references.values())]
+  for (const column of ['id','youtube_video_id'] as const) {
+    const valid = keys.filter(key => column === 'id' ? uuid.test(key) : /^[\w-]{11}$/.test(key))
+    for (const ids of batches(valid)) {
+      const {data} = await admin.from('videos').select('id,youtube_video_id,title,thumbnail_url,channels!inner(title,parent_id)')
+        .eq('channels.parent_id',parent).in(column,ids).throwOnError()
+      for (const video of (data ?? []) as unknown as CatalogVideo[]) videos.set(video[column],video)
+    }
+  }
+  for (const ids of batches([...new Set([...videos.values()].map(video => video.id))])) {
+    const {data} = await admin.from('watch_sessions').select('video_id,progress_percent,absolute_position')
+      .eq('child_id',child).eq('parent_id',parent).in('video_id',ids).throwOnError()
+    for (const row of data ?? []) progress.set(row.video_id,row)
+  }
+  for (const start of starts) {
+    const video = videos.get(references.get(start.id) ?? '')
+    start.title = null // Old RPCs put the raw video key here when the event lacks a title.
+    start.card = video ? makeCard(video,progress.get(video.id)) : null
+  }
+}
+
+type CatalogVideo = {id:string; youtube_video_id:string; title:string; thumbnail_url:string; channels:{title:string; parent_id:string}}
+type Progress = {progress_percent:number; absolute_position:number}
+
+function makeCard(video: CatalogVideo, progress?: Progress) {
+  return {target:video.youtube_video_id || video.id, title:video.title, thumbnail:video.thumbnail_url,
+    channel:video.channels.title, percent:progress?.progress_percent ?? null, resume:progress?.absolute_position ?? 0}
+}
+
+function* batches(ids: string[]) {
+  for (let i = 0; i < ids.length; i += 60) yield ids.slice(i,i+60)
+}
+
+async function dayReply(admin: SupabaseClient, viewer: string, child: string, date: string, day: DayRows) {
+  try {
+    await addDayCards(admin,viewer,child,date,day)
+    return reply(day)
+  } catch {
+    return reply({code:'WATCH_LOOKUP_FAILED'},503)
+  }
+}
+
 async function legacyDay(admin: SupabaseClient, viewer: string, childId: string, date: string) {
   let link = admin.from('children').select('id').eq('id',childId)
   if (viewer !== childId) link = link.eq('parent_id',viewer)
@@ -13,8 +96,8 @@ async function legacyDay(admin: SupabaseClient, viewer: string, childId: string,
   if (viewer !== childId) query = query.eq('parent_id',viewer)
   const {data:watch,error:watchError} = await query.maybeSingle()
   if (watchError) return reply({code:'WATCH_LOOKUP_FAILED'},503)
-  return reply({coverage:'unavailable',tracking_setup_required:true,has_watch_history:Number(watch?.seconds_watched ?? 0)>0,
-    visits:[],website:0,playback:0})
+  return dayReply(admin,viewer,childId,date,{coverage:'unavailable',tracking_setup_required:true,has_watch_history:Number(watch?.seconds_watched ?? 0)>0,
+    visits:[],website:0,playback:Number(watch?.seconds_watched ?? 0)})
 }
 
 export async function childActivity(admin: SupabaseClient, token: string, body: Record<string, any>,
@@ -47,8 +130,9 @@ export async function childActivity(admin: SupabaseClient, token: string, body: 
           return reply({code:'WATCH_LOOKUP_FAILED'},503)
         }
         data.has_watch_history = Number(watch?.seconds_watched ?? 0) > 0
+        if (data.has_watch_history) data.playback = Number(watch?.seconds_watched ?? 0)
       }
-      return reply(data)
+      return dayReply(admin,user.id,body.child_id,body.date,data)
     }
     if (user.app_metadata.role !== 'child') return reply({},403)
     const {data: child,error: lookup} = await admin.from('children').select('id').eq('id',user.id).maybeSingle()

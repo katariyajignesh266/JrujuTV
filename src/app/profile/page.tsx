@@ -1028,7 +1028,7 @@ export default function ProfilePage() {
               <div className="overflow-y-auto flex-1 p-5">
                 <ChildProgressView
                   childId={detailChild.id}
-                  viewerRole="parent"
+                  key={detailChild.id}
                   accessToken={session.access_token}
                 />
               </div>
@@ -1077,7 +1077,7 @@ export default function ProfilePage() {
               <div className="overflow-y-auto flex-1 p-5">
                 <ChildProgressView
                   childId={user!.id}
-                  viewerRole="child"
+                  key={user!.id}
                   accessToken={session.access_token}
                 />
               </div>

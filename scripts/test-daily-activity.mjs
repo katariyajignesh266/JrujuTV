@@ -53,6 +53,18 @@ const admin = {
   auth:{getUser:async()=>({data:{user:{id:'fixture-parent'}}})},
   rpc:async()=>({error:{code:'PGRST202'}}),
   from(table) {
+    if (table === 'watch_sessions') {
+      const filters = {};
+      return {select(){return this;}, eq(k,v){filters[k]=v;return this;},
+        gte(k,v){filters.from=v;return this;}, lt(k,v){filters.until=v;return this;},
+        order(){return this;}, range(){return this;}, async throwOnError(){
+          assert.deepEqual(filters,{child_id:child,parent_id:'fixture-parent',
+            from:'2026-11-22T18:30:00.000Z',until:'2026-11-23T18:30:00.000Z'});
+          return {data:[{id:'legacy',last_watched_at:filters.from,progress_percent:50,absolute_position:60,
+            videos:{id:'video',youtube_video_id:'abcdefghijk',title:'Older video',thumbnail_url:'',
+              channels:{title:'Channel',parent_id:'fixture-parent'}}}]};
+        }};
+    }
     const filters = {};
     return { select(){return this;}, eq(key,value){filters[key]=value;return this;},
       limit:async()=>({error:{code:'PGRST205'}}),
@@ -73,6 +85,8 @@ const details = await legacy.json();
 assert.equal(details.tracking_setup_required,true);
 assert.equal(details.has_watch_history,true);
 assert.equal(details.visits.length,0);
+assert.equal(details.playback,900);
+assert.equal(details.history[0].card.title,'Older video');
 linked=false;
 assert.equal((await childActivity(admin,'fixture',day,new Date().toISOString())).status,403);
 console.log('PASS: authorized historical playback and unrelated-parent denial with missing visit schema.');
