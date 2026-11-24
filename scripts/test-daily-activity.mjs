@@ -121,3 +121,66 @@ try {
 } finally {
   globalThis.fetch = originalFetch;
 }
+
+// Reproduce Render forwarding a pre-card Edge response with only public server config.
+try {
+  const starts = ['abcdefghijk','Bird songs','abcdefghijk','Deleted'].map((title,i) =>
+    ({id:String(i),at:'2026-11-23T04:0'+i+':00Z',title}));
+  const catalog = ['Forest','Bird songs'].map((title,i)=>({
+    id:'00000000-0000-4000-8000-00000000000'+i,youtube_video_id:i?'lmnopqrstuv':'abcdefghijk',
+    title,thumbnail_url:'/thumb-'+i,channels:{title:'Nature'}
+  }));
+  const requests = [];
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(input);
+    assert.equal(new Headers(options.headers).get('authorization'),'Bearer fixture-viewer');
+    requests.push(url.pathname);
+    if (url.pathname.endsWith('/child-activity')) return Response.json({visits:[{starts}]});
+    if (url.pathname.endsWith('/videos')) return Response.json(catalog.filter(video =>
+      ['youtube_video_id','title'].some(k=>url.searchParams.get(k)?.includes(JSON.stringify(video[k])))));
+    assert.equal(url.pathname,'/rest/v1/watch_sessions');
+    assert.equal(url.searchParams.get('child_id'),'eq.'+child);
+    return Response.json([{video_id:catalog[0].id,absolute_position:37,progress_percent:42}]);
+  };
+  const result = await POST(request(day));
+  assert.equal(result.status,200);
+  const cards = (await result.json()).visits[0].starts;
+  assert.deepEqual(cards.map(s=>s.card?.title),['Forest','Bird songs','Forest',undefined]);
+  assert.deepEqual(cards.map(s=>s.at),starts.map(s=>s.at));
+  assert.equal(cards[0].card.thumbnail,'/thumb-0');
+  assert.equal(cards[0].card.resume,37);
+  assert.equal(requests.filter(p=>p.endsWith('/watch_sessions')).length,1);
+  console.log('PASS: legacy Edge response on Render resolves repeated IDs and exact titles with viewer-scoped batched reads.');
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+for (const viewer of [child,'fixture-parent']) {
+  const video = {id:child,youtube_video_id:'abcdefghijk',title:'Watched video',thumbnail_url:'',
+    channels:{parent_id:'catalog-owner',title:'Nature'}};
+  const db = {
+    auth:{getUser:async()=>({data:{user:{id:viewer}}})},
+    rpc:async()=>({data:{visits:[{starts:[{id:'event',at:'2026-11-23T05:00:00Z',title:null}]}]}}),
+    from(table) {
+      const filters = {};
+      return {
+        select(){return this},eq(k,v){filters[k]=v;return this},in(){return this},order(){return this},single(){return this},
+        async throwOnError(){
+          if(table==='children')return {data:{parent_id:'fixture-parent'}};
+          if(table==='child_activity_events')return {data:[{id:'event',video:'abcdefghijk'}]};
+          if(table==='videos')return {data:[]};
+          assert.equal(table,'watch_sessions');
+          assert.deepEqual(filters,{child_id:child,parent_id:'fixture-parent'});
+          return {data:[{videos:video,absolute_position:91,progress_percent:70}]};
+        }
+      };
+    }
+  };
+  const response=await childActivity(db,'test',day,new Date().toISOString());
+  assert.equal(response.status,200);
+  const card=(await response.json()).visits[0].starts[0].card;
+  assert.equal(card.target,video.youtube_video_id);
+  assert.match(card.thumbnail,/abcdefghijk/);
+  assert.equal(card.resume,91);
+}
+console.log('PASS: parent and child resolve an out-of-catalog video through their own watch record.');

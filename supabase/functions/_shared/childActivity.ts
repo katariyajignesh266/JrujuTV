@@ -29,7 +29,7 @@ async function addDayCards(admin: SupabaseClient, viewer: string, child: string,
       for (const row of data ?? []) {
         const video = row.videos as unknown as CatalogVideo | null
         day.history.push({id:row.id, at:row.last_watched_at, title:null,
-          card:video?.channels?.parent_id === parent ? makeCard(video, row) : null})
+          card:video?.channels ? makeCard(video, row) : null})
       }
       if ((data?.length ?? 0) < 200) break
     }
@@ -58,6 +58,25 @@ async function addDayCards(admin: SupabaseClient, viewer: string, child: string,
       .eq('child_id',child).eq('parent_id',parent).in('video_id',ids).throwOnError()
     for (const row of data ?? []) progress.set(row.video_id,row)
   }
+  // A recorded watch can reference a catalog row outside the family's own
+  // channels. Use the selected child's actual session as proof of that watch.
+  const unresolved = keys.filter(key => !videos.has(key))
+  for (const column of ['id','youtube_video_id'] as const) {
+    const valid = unresolved.filter(key => column === 'id' ? uuid.test(key) : /^[\w-]{11}$/.test(key))
+    for (const ids of batches(valid)) {
+      const {data} = await admin.from('watch_sessions')
+        .select('progress_percent,absolute_position,videos!inner(id,youtube_video_id,title,thumbnail_url,channels!inner(title,parent_id))')
+        .eq('child_id',child).eq('parent_id',parent).in('videos.'+column,ids)
+        .order('last_watched_at',{ascending:false}).throwOnError()
+      for (const row of data ?? []) {
+        const video = row.videos as unknown as CatalogVideo
+        if (!videos.has(video[column])) {
+          videos.set(video[column],video)
+          progress.set(video.id,row)
+        }
+      }
+    }
+  }
   for (const start of starts) {
     const video = videos.get(references.get(start.id) ?? '')
     start.title = null // Old RPCs put the raw video key here when the event lacks a title.
@@ -69,7 +88,7 @@ type CatalogVideo = {id:string; youtube_video_id:string; title:string; thumbnail
 type Progress = {progress_percent:number; absolute_position:number}
 
 function makeCard(video: CatalogVideo, progress?: Progress) {
-  return {target:video.youtube_video_id || video.id, title:video.title, thumbnail:video.thumbnail_url,
+  return {target:video.youtube_video_id || video.id, title:video.title, thumbnail:video.thumbnail_url || (/^[\w-]{11}$/.test(video.youtube_video_id) ? 'https://i.ytimg.com/vi/'+video.youtube_video_id+'/hqdefault.jpg' : ''),
     channel:video.channels.title, percent:progress?.progress_percent ?? null, resume:progress?.absolute_position ?? 0}
 }
 
