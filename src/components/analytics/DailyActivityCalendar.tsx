@@ -6,7 +6,8 @@ import { CalendarDays, ChevronLeft, ChevronRight, LogIn, LogOut, CirclePlay, Clo
 import { ActivityLoadError, loadActivityDay, reportingZone as zone, type ActivityDay } from '@/lib/activity/loadActivityDay';
 import { ActivityVideoCard } from './ActivityVideoCard';
 
-const dayKey = (d: Date) => new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+const dayFormatter = new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'});
+const dayKey = (d: Date) => dayFormatter.format(d);
 const clock = new Intl.DateTimeFormat('en-US',{timeZone:zone,hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
 const eventStyles = {
   open: [LogIn, 'text-emerald-800 dark:text-emerald-300'],
@@ -29,24 +30,38 @@ const duration = (s: number) => {
     minutes ? minutes+' min' : seconds+' sec';
 };
 export function DailyActivityCalendar({childId,accessToken}:{childId:string;accessToken:string}) {
+  return <Calendar key={JSON.stringify([childId,accessToken])} childId={childId} accessToken={accessToken} />;
+}
+
+type CachedDay = { value: ActivityDay; loaded: number };
+function Calendar({childId,accessToken}:{childId:string;accessToken:string}) {
   const today = dayKey(new Date());
   const [date,setDate] = useState(today);
   const [month,setMonth] = useState(today.slice(0,7));
-  const [result,setResult] = useState<{key:string;value:ActivityDay}|null>(null);
+  const [daysByDate,setDaysByDate] = useState(() => new Map<string,CachedDay>());
   const [error,setError] = useState('');
   const [retry,setRetry] = useState(0);
-  const key = childId+'/'+date;
+  const cached = daysByDate.get(date);
   useEffect(() => {
     const controller = new AbortController();
     let busy = false;
     setError('');
-    setResult(null);
+    const freshFor = date === today ? 15000 : 300000;
     async function refresh() {
       if (busy) return;
       busy = true;
       try {
         const value = await loadActivityDay(childId, date, accessToken, controller.signal);
-        if (!controller.signal.aborted) { setResult({key,value}); setError(''); }
+        if (!controller.signal.aborted) {
+          setDaysByDate(previous => {
+            const next = new Map(previous);
+            next.delete(date);
+            next.set(date,{value,loaded:Date.now()});
+            if (next.size > 31) next.delete(next.keys().next().value!);
+            return next;
+          });
+          setError('');
+        }
       } catch (cause) {
         if (controller.signal.aborted) return;
         const failure = cause instanceof ActivityLoadError ? cause :
@@ -55,11 +70,11 @@ export function DailyActivityCalendar({childId,accessToken}:{childId:string;acce
         setError(failure.message);
       } finally { busy=false; }
     }
-    void refresh();
+    if (!cached || Date.now()-cached.loaded >= freshFor) void refresh();
     const tick=setInterval(()=>{ if (date===dayKey(new Date()) && !document.hidden) void refresh(); },15000);
     return ()=>{controller.abort();clearInterval(tick);};
-  },[accessToken,childId,date,key,retry]);
-  const data=result?.key===key ? result.value : null;
+  },[accessToken,childId,date,cached,today,retry]);
+  const data=cached?.value;
   const first=new Date(month+'-01T12:00:00Z');
   const days=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
   function move(n:number) {
@@ -87,7 +102,7 @@ export function DailyActivityCalendar({childId,accessToken}:{childId:string;acce
       })}
     </div>
     <p className="text-xs text-content-secondary">{date} · India Standard Time</p>
-    {error ? <p role="alert">{error} <button type="button" className="underline" onClick={()=>{setError(''); setResult(null); setRetry(n=>n+1);}}>Retry</button></p> :
+    {error ? <p role="alert">{error} <button type="button" className="underline" onClick={()=>{setError(''); setDaysByDate(previous => { const next=new Map(previous); next.delete(date); return next; }); setRetry(n=>n+1);}}>Retry</button></p> :
       !data ? <p role="status">Loading activity…</p> : <>
         {data.tracking_setup_required && <p className="text-sm">Visit tracking is awaiting database setup.</p>}
         {data.coverage === 'partial' && <p className="text-sm">Visit tracking began during this day.</p>}
@@ -96,7 +111,7 @@ export function DailyActivityCalendar({childId,accessToken}:{childId:string;acce
             ? 'Playback was recorded, but visit details are unavailable for this date.'
             : data.coverage === 'unavailable' ? 'Visit tracking was unavailable on this date.' : 'No visits recorded for this date.'}
         </p>}
-        {data.visits.map(v => <article key={v.id} aria-label="Visit" className="space-y-3 rounded-xl border border-border p-3 text-sm">
+        {data.visits.map(v => <article key={v.id} aria-label="Visit" className="-mx-4 space-y-3 border-y border-border px-4 py-3 text-sm">
           <EventLabel kind="open" label="Opened" at={v.opened} date={date} />
           {v.starts.map(start => <div key={start.id} className="space-y-1.5">
             <EventLabel kind="start" label="Started watching" at={start.at} date={date} />

@@ -48,15 +48,13 @@ async function addDayCards(admin: SupabaseClient, viewer: string, child: string,
   for (const column of ['id','youtube_video_id'] as const) {
     const valid = keys.filter(key => column === 'id' ? uuid.test(key) : /^[\w-]{11}$/.test(key))
     for (const ids of batches(valid)) {
-      const {data} = await admin.from('videos').select('id,youtube_video_id,title,thumbnail_url,channels!inner(title,parent_id)')
-        .eq('channels.parent_id',parent).in(column,ids).throwOnError()
-      for (const video of (data ?? []) as unknown as CatalogVideo[]) videos.set(video[column],video)
+      const {data} = await admin.from('videos').select('id,youtube_video_id,title,thumbnail_url,channels!inner(title,parent_id),watch_sessions(progress_percent,absolute_position)')
+        .eq('channels.parent_id',parent).eq('watch_sessions.child_id',child).eq('watch_sessions.parent_id',parent).in(column,ids).throwOnError()
+      for (const video of (data ?? []) as unknown as (CatalogVideo & {watch_sessions:Progress[]})[]) {
+        videos.set(video[column],video)
+        if (video.watch_sessions[0]) progress.set(video.id,video.watch_sessions[0])
+      }
     }
-  }
-  for (const ids of batches([...new Set([...videos.values()].map(video => video.id))])) {
-    const {data} = await admin.from('watch_sessions').select('video_id,progress_percent,absolute_position')
-      .eq('child_id',child).eq('parent_id',parent).in('video_id',ids).throwOnError()
-    for (const row of data ?? []) progress.set(row.video_id,row)
   }
   // A recorded watch can reference a catalog row outside the family's own
   // channels. Use the selected child's actual session as proof of that watch.
