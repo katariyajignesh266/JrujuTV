@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/layout/PageShell';
 import { useAuthStore } from '@/store/authStore';
@@ -10,7 +11,7 @@ import { ChildProgressView } from '@/components/analytics/ChildProgressView';
 import { formatWatchDuration } from '@/lib/formatters';
 import { getChannels } from '@/lib/api/channels';
 import {
-  CircleUser,
+  ArrowRight,
   Shield,
   Settings,
   LogOut,
@@ -36,6 +37,7 @@ import {
   Smile,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import styles from './GuestProfile.module.css';
 
 interface ChildRecord {
   id: string;
@@ -326,30 +328,24 @@ export default function ProfilePage() {
   // ─────────────────────────────────────────────────────────────────────────
   if (isGuest) {
     return (
-      <PageShell>
-        <div className="flex flex-col items-center justify-center min-h-[60dvh] gap-6 text-center px-6">
-          <div className="h-24 w-24 rounded-full bg-surface-secondary flex items-center justify-center">
-            <CircleUser size={44} strokeWidth={1.25} className="text-content-disabled" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="font-display text-fluid-xl font-bold text-content-primary mb-2">You</h1>
-            <p className="text-fluid-sm text-content-secondary mb-6">
-              Sign in to manage your JruJu TV experience
-            </p>
-            <button
-              type="button"
-              onClick={openAuthModal}
-              className={cn(
-                'inline-flex items-center gap-2 px-6 py-3 rounded-full',
-                'bg-brand-primary text-white font-semibold text-fluid-sm',
-                'hover:opacity-90 active:scale-95 transition-all duration-150',
-                'focus-visible:ring-2 focus-visible:ring-brand-primary'
-              )}
-            >
-              <CircleUser size={18} aria-hidden="true" />
-              Sign In
-            </button>
-          </div>
+      <PageShell className="md:w-auto">
+        <div className={styles.stage}>
+          <section className={styles.card} aria-labelledby="guest-profile-title">
+            <div className={styles.artwork}>
+              <Image src="/family-room.webp" alt="" fill priority
+                sizes="(min-width: 900px) 740px, (min-width: 540px) 500px, 100vw" />
+            </div>
+            <div className={styles.copy}>
+              <p className={styles.eyebrow}><span aria-hidden="true" />Your profile</p>
+              <h1 id="guest-profile-title" className={styles.title}>Your family <em>room.</em></h1>
+              <p className={styles.description}>
+                Sign in as a parent to choose channels, or as a child to watch them.
+              </p>
+              <button type="button" className={styles.signIn} onClick={openAuthModal}>
+                Sign in <ArrowRight size={18} aria-hidden="true" />
+              </button>
+            </div>
+          </section>
         </div>
       </PageShell>
     );
