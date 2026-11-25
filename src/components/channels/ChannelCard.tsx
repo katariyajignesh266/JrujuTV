@@ -10,17 +10,13 @@ import {
   ExternalLink,
   Loader2,
   CheckCircle2,
-  Play,
-  Users,
-  ChevronRight,
-  Shield,
-  Sparkles,
   Zap,
   SlidersHorizontal,
 } from 'lucide-react';
 import { Channel } from '@/types/content';
 import { cn } from '@/lib/cn';
 import { formatCompactNumber, formatRelativeTime } from '@/lib/formatters';
+import { ChannelLibraryCard } from './ChannelLibraryCard';
 
 interface ChannelCardProps {
   channel: Channel;
@@ -32,9 +28,14 @@ interface ChannelCardProps {
   onUpdateShortsSettings?: (channel: Channel, enabled: boolean, limit: number | null) => void;
 }
 
-export function ChannelCard({
+export function ChannelCard(props: ChannelCardProps) {
+  return props.variant === 'admin'
+    ? <AdminChannelCard {...props} />
+    : <ChannelLibraryCard channel={props.channel} />;
+}
+
+function AdminChannelCard({
   channel,
-  variant = 'public',
   onToggleActive,
   onSync,
   onDelete,
@@ -72,104 +73,6 @@ export function ChannelCard({
   const handleToggleShorts = () => {
     onUpdateShortsSettings?.(channel, !shortsEnabled, shortsLimit ?? 50);
   };
-
-  if (variant === 'public') {
-    return (
-      <Link
-        href={`/channels/${channel.id}`}
-        className={cn(
-          'group relative flex flex-col items-center text-center p-5 rounded-3xl overflow-hidden card-shimmer',
-          /* Light mode */
-          'bg-white/80 border border-white/90',
-          'shadow-[0_2px_12px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]',
-          /* Dark mode */
-          'dark:bg-[#14142A]/80 dark:border-white/[0.06]',
-          'dark:shadow-[0_4px_20px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)]',
-          /* Backdrop */
-          'backdrop-blur-xl',
-          /* Hover */
-          'hover:-translate-y-2 hover:shadow-[0_12px_40px_rgba(229,57,53,0.18),0_4px_12px_rgba(0,0,0,0.08)]',
-          'dark:hover:shadow-[0_12px_40px_rgba(229,57,53,0.25),0_4px_16px_rgba(0,0,0,0.45)]',
-          'hover:border-red-400/30 dark:hover:border-red-500/20',
-          'active:scale-[0.97]',
-          'transition-all duration-350 ease-out',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60'
-        )}
-      >
-        {/* Rich ambient gradient on hover */}
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/[0.07] via-transparent to-rose-600/[0.05] dark:from-red-500/[0.14] dark:to-rose-500/[0.09]" />
-        </div>
-
-        {/* Top shimmer line */}
-        <div className="absolute top-0 left-[10%] right-[10%] h-[1.5px] bg-gradient-to-r from-transparent via-red-400/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 rounded-full" />
-
-        {/* Corner decoration */}
-        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:rotate-12">
-          <Sparkles size={12} className="text-red-400/60" />
-        </div>
-
-        {/* Avatar */}
-        <div className="relative mt-2 mb-4 z-10">
-          <div className="absolute -inset-3 rounded-[28px] bg-gradient-to-br from-red-500/30 to-rose-600/20 blur-lg opacity-0 group-hover:opacity-100 transition-all duration-500" />
-
-          <div
-            className={cn(
-              'relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden',
-              'border-2 border-neutral-200/80 dark:border-white/[0.08]',
-              'shadow-md group-hover:shadow-xl group-hover:shadow-red-500/25',
-              'group-hover:scale-[1.07] group-hover:border-red-400/50 dark:group-hover:border-red-400/30',
-              'transition-all duration-350',
-              'ring-4 ring-transparent group-hover:ring-red-500/10 dark:group-hover:ring-red-500/15'
-            )}
-          >
-            {channel.thumbnail_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={channel.thumbnail_url}
-                alt={channel.title}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center font-bold text-2xl text-red-500 bg-gradient-to-br from-red-500/12 to-rose-500/10 dark:from-red-500/20 dark:to-rose-500/20">
-                {channel.title.charAt(0)}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Channel Name */}
-        <h3 className="font-bold text-fluid-base text-[var(--color-text-primary)] group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors line-clamp-1 w-full px-1 mb-1 font-display">
-          {channel.title}
-        </h3>
-
-        {/* Subscribers / Videos stat pill */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-medium bg-neutral-100/90 dark:bg-white/[0.05] border border-neutral-200/60 dark:border-white/[0.06] text-[var(--color-text-secondary)] mt-1">
-          {channel.subscriber_count > 0 && (
-            <span className="flex items-center gap-1">
-              <Users size={11} className="text-red-500 opacity-75" />
-              {formatCompactNumber(channel.subscriber_count)}
-            </span>
-          )}
-          {channel.subscriber_count > 0 && channel.video_count > 0 && (
-            <span className="opacity-30">·</span>
-          )}
-          {channel.video_count > 0 && (
-            <span className="flex items-center gap-1">
-              <Play size={10} className="text-red-500 opacity-75 fill-red-500/30" />
-              {channel.video_count.toLocaleString()}
-            </span>
-          )}
-        </div>
-
-        {/* View Channel Link Indicator */}
-        <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0">
-          <span>Explore Channel</span>
-          <ChevronRight size={13} />
-        </div>
-      </Link>
-    );
-  }
 
   // ── Admin / Manage-Channels variant ──────────────────────────────────────────
   return (
