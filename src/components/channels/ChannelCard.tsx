@@ -1,385 +1,174 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import {
-  Eye,
-  EyeOff,
-  RefreshCw,
-  Trash2,
-  ExternalLink,
-  Loader2,
-  CheckCircle2,
-  Zap,
-  SlidersHorizontal,
-} from 'lucide-react';
-import { Channel } from '@/types/content';
-import { cn } from '@/lib/cn';
-import { formatCompactNumber, formatRelativeTime } from '@/lib/formatters';
+import { ArrowUpRight, Check, CircleCheck, Clock3, Eye, EyeOff, RefreshCw, SlidersHorizontal, Trash2, Zap } from 'lucide-react';
+import { formatRelativeTime } from '@/lib/formatters';
+import type { Channel } from '@/types/content';
+import { ChannelArtwork } from './ChannelArtwork';
 import { ChannelLibraryCard } from './ChannelLibraryCard';
+import type { ChannelImport } from './useChannelImports';
+import styles from './ChannelManager.module.css';
 
-interface ChannelCardProps {
+interface AdminProps {
+  variant: 'admin';
   channel: Channel;
-  variant?: 'public' | 'admin';
-  onToggleActive?: (channel: Channel) => void;
-  onSync?: (channel: Channel) => void;
-  onDelete?: (channel: Channel) => void;
-  isSyncing?: boolean;
-  onUpdateShortsSettings?: (channel: Channel, enabled: boolean, limit: number | null) => void;
+  progress?: ChannelImport;
+  onToggleActive: (channel: Channel) => Promise<void>;
+  onUpdateShortsSettings: (channel: Channel, enabled: boolean, limit: number | null) => Promise<void>;
+  onSync: (channel: Channel) => void;
+  onDelete: (channel: Channel, trigger: HTMLButtonElement) => void;
 }
 
-export function ChannelCard(props: ChannelCardProps) {
-  return props.variant === 'admin'
-    ? <AdminChannelCard {...props} />
-    : <ChannelLibraryCard channel={props.channel} />;
+export function ChannelCard(props: AdminProps | { channel: Channel; variant?: 'public' }) {
+  return props.variant === 'admin' ? <AdminChannelCard {...props} /> : <ChannelLibraryCard channel={props.channel} />;
 }
 
-function AdminChannelCard({
-  channel,
-  onToggleActive,
-  onSync,
-  onDelete,
-  isSyncing,
-  onUpdateShortsSettings,
-}: ChannelCardProps) {
-  const isHidden = !channel.is_active;
+const presets = [10, 25, 50, 100, null];
 
-  // Shorts settings state
-  const [showShortsSettings, setShowShortsSettings] = useState(false);
-  const [customInputOpen, setCustomInputOpen] = useState(false);
-  const [customLimitVal, setCustomLimitVal] = useState(
-    channel.shorts_limit !== null && channel.shorts_limit !== undefined
-      ? String(channel.shorts_limit)
-      : ''
-  );
+function AdminChannelCard({ channel, progress, onToggleActive, onUpdateShortsSettings, onSync, onDelete }: AdminProps) {
+  const id = useId();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customValue, setCustomValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const enabled = channel.shorts_enabled ?? true;
+  const limit = channel.shorts_limit === undefined ? 50 : channel.shorts_limit;
+  const customLimit = !presets.includes(limit);
+  const shortsCount = channel.shorts_total_count;
+  const videoCount = channel.synced_video_count ?? channel.video_count;
+  const syncTime = formatRelativeTime(channel.last_synced_at);
+  const VisibilityIcon = channel.is_active ? Eye : EyeOff;
+  const importing = progress?.phase === 'importing' || progress?.phase === 'retrying';
+  const busy = importing || progress?.phase === 'refreshing';
+  const paused = progress?.phase === 'paused';
 
-  const shortsEnabled = channel.shorts_enabled ?? true;
-  const shortsLimit = channel.shorts_limit;
-  const shortsFound = channel.shorts_total_count ?? 0;
-
-  const handleLimitPreset = (limit: number | null) => {
-    setCustomInputOpen(false);
-    onUpdateShortsSettings?.(channel, shortsEnabled, limit);
-  };
-
-  const handleCustomLimitSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = parseInt(customLimitVal, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      onUpdateShortsSettings?.(channel, shortsEnabled, parsed);
+  async function save(action: () => Promise<void>, closeCustom = false) {
+    if (saving) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await action();
+      if (closeCustom) setCustomOpen(false);
+    } catch {
+      setSaveError('Changes could not be saved. Try again.');
+    } finally {
+      setSaving(false);
     }
-  };
+  }
 
-  const handleToggleShorts = () => {
-    onUpdateShortsSettings?.(channel, !shortsEnabled, shortsLimit ?? 50);
-  };
+  function setLimit(next: number | null) {
+    void save(() => onUpdateShortsSettings(channel, enabled, next), true);
+  }
 
-  // ── Admin / Manage-Channels variant ──────────────────────────────────────────
+  function saveCustom(event: FormEvent) {
+    event.preventDefault();
+    const value = Number(customValue);
+    if (Number.isInteger(value) && value >= 1 && value <= 5000) setLimit(value);
+  }
+
   return (
-    <div
-      className={cn(
-        'group relative w-full overflow-hidden flex flex-col gap-3 p-4 sm:p-5 rounded-3xl card-shimmer',
-        /* Base */
-        'bg-white/75 dark:bg-[#14142A]/70 backdrop-blur-xl',
-        'border border-neutral-200/80 dark:border-white/[0.06]',
-        'shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.30)]',
-        /* Hover */
-        'hover:shadow-[0_8px_28px_rgba(229,57,53,0.12),0_2px_8px_rgba(0,0,0,0.06)]',
-        'dark:hover:shadow-[0_8px_28px_rgba(229,57,53,0.18),0_2px_12px_rgba(0,0,0,0.40)]',
-        'hover:border-red-400/30 dark:hover:border-red-400/20',
-        'transition-all duration-250',
-        isHidden && 'opacity-55 border-dashed bg-neutral-50/60 dark:bg-white/[0.02]'
-      )}
-    >
-      {/* Left accent bar on hover */}
-      <div className="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_8px_rgba(229,57,53,0.6)]" />
-
-      {/* Main Channel Summary Row */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
-        <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto flex-1">
-          {/* Avatar */}
-          <div
-            className={cn(
-              'relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden shrink-0',
-              'bg-neutral-100 dark:bg-white/[0.05]',
-              'border border-neutral-200/80 dark:border-white/[0.07]',
-              'shadow-sm group-hover:shadow-md group-hover:shadow-red-500/15 group-hover:scale-[1.04]',
-              'transition-all duration-250'
-            )}
-          >
-            {channel.thumbnail_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={channel.thumbnail_url}
-                alt={channel.title}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center font-bold text-lg text-red-500 bg-gradient-to-br from-red-500/10 to-rose-500/10">
-                {channel.title.charAt(0)}
-              </div>
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-1.5">
-            {/* Title + Status badges */}
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <h4
-                className="font-bold text-[14.5px] text-[var(--color-text-primary)] truncate max-w-[180px] sm:max-w-[260px] group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors font-display"
-                title={channel.title}
-              >
-                {channel.title}
-              </h4>
-
-              {isHidden && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-100 dark:bg-white/[0.05] text-[var(--color-text-secondary)] border border-neutral-300/80 dark:border-white/[0.07]">
-                  Hidden
-                </span>
-              )}
-
-              {(channel.sync_status === 'pending' || channel.sync_status === 'in_progress') && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 animate-pulse">
-                  <Loader2 size={9} className="animate-spin" />
-                  Importing
-                </span>
-              )}
-
-              {channel.sync_status === 'complete' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
-                  <CheckCircle2 size={9} />
-                  Synced
-                </span>
-              )}
-
-              {/* Shorts Feed Status Indicator */}
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border',
-                  shortsEnabled
-                    ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
-                    : 'bg-neutral-100 dark:bg-white/[0.05] text-neutral-400 border-neutral-200 dark:border-white/[0.06]'
-                )}
-              >
-                <Zap size={9} className={shortsEnabled ? 'fill-red-500' : ''} />
-                {shortsEnabled ? `Shorts on (${shortsLimit ?? 'All'})` : 'Shorts off'}
-              </span>
-            </div>
-
-            {/* Meta */}
-            <p className="text-[11.5px] text-[var(--color-text-secondary)] flex items-center gap-1.5 flex-wrap">
-              {(channel.synced_video_count ?? channel.video_count) > 0 && (
-                <span className="font-semibold text-[var(--color-text-primary)]">
-                  {(channel.synced_video_count ?? channel.video_count).toLocaleString()} videos
-                </span>
-              )}
-              <span className="opacity-35">·</span>
-              <span className="font-semibold text-brand-primary">
-                {shortsFound.toLocaleString()} Shorts found
-              </span>
-              <span className="opacity-35">·</span>
-              <span>Last synced: {formatRelativeTime(channel.last_synced_at)}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-neutral-100/80 dark:border-white/[0.05] shrink-0">
-          {/* Configure Shorts Feed */}
-          <button
-            type="button"
-            onClick={() => setShowShortsSettings((prev) => !prev)}
-            className={cn(
-              'h-9 px-2.5 rounded-xl flex items-center gap-1.5 text-xs font-medium border transition-all duration-150',
-              showShortsSettings
-                ? 'bg-brand-primary text-white border-brand-primary shadow-sm shadow-brand-primary/20'
-                : 'bg-neutral-100/80 dark:bg-white/[0.04] border-neutral-200/80 dark:border-white/[0.07] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-neutral-300'
-            )}
-            title="Configure Shorts feed for this channel"
-            aria-label="Configure Shorts feed"
-          >
-            <SlidersHorizontal size={13} />
-            <span className="hidden xs:inline">Shorts</span>
-          </button>
-
-          {/* View Channel */}
-          <Link
-            href={`/channels/${channel.id}`}
-            className={cn(
-              'h-9 w-9 rounded-xl flex items-center justify-center',
-              'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
-              'bg-neutral-100/80 dark:bg-white/[0.04] border border-neutral-200/80 dark:border-white/[0.07]',
-              'hover:border-neutral-300 dark:hover:border-red-500/30 hover:bg-neutral-200/80 dark:hover:bg-red-500/10',
-              'hover:shadow-sm dark:hover:shadow-red-500/10',
-              'active:scale-95 transition-all duration-150'
-            )}
-            title="View channel page"
-            aria-label="View channel page"
-          >
-            <ExternalLink size={14} />
-          </Link>
-
-          {/* Hide / Unhide Channel */}
-          <button
-            type="button"
-            onClick={() => onToggleActive?.(channel)}
-            className={cn(
-              'h-9 w-9 rounded-xl flex items-center justify-center active:scale-95 transition-all duration-150 border',
-              isHidden
-                ? 'text-amber-500 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 hover:shadow-sm hover:shadow-amber-500/15'
-                : 'text-[var(--color-text-secondary)] bg-neutral-100/80 dark:bg-white/[0.04] border-neutral-200/80 dark:border-white/[0.07] hover:text-[var(--color-text-primary)] hover:border-neutral-300 dark:hover:border-red-500/30 hover:bg-neutral-200/80 dark:hover:bg-red-500/10'
-            )}
-            title={isHidden ? 'Show channel to children' : 'Hide channel from feeds'}
-            aria-label={isHidden ? 'Show channel to children' : 'Hide channel from feeds'}
-          >
-            {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-
-          {/* Sync */}
-          <button
-            type="button"
-            onClick={() => onSync?.(channel)}
-            disabled={isSyncing}
-            className={cn(
-              'h-9 w-9 rounded-xl flex items-center justify-center',
-              'text-[var(--color-text-secondary)] hover:text-red-500 dark:hover:text-red-400',
-              'bg-neutral-100/80 dark:bg-white/[0.04] border border-neutral-200/80 dark:border-white/[0.07]',
-              'hover:border-red-400/40 dark:hover:border-red-400/25 hover:bg-red-500/5 dark:hover:bg-red-500/10',
-              'hover:shadow-sm hover:shadow-red-500/10',
-              'active:scale-95 transition-all duration-150 disabled:opacity-40'
-            )}
-            title="Refresh videos from YouTube"
-            aria-label="Refresh videos from YouTube"
-          >
-            {isSyncing ? (
-              <Loader2 size={14} className="animate-spin text-red-500 dark:text-red-400" />
-            ) : (
-              <RefreshCw size={14} />
-            )}
-          </button>
-
-          {/* Delete */}
-          <button
-            type="button"
-            onClick={() => onDelete?.(channel)}
-            className="h-9 w-9 rounded-xl flex items-center justify-center text-red-500 bg-red-500/8 dark:bg-red-500/10 border border-red-500/20 dark:border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 hover:shadow-sm hover:shadow-red-500/15 active:scale-95 transition-all duration-150"
-            title="Delete channel and all videos"
-            aria-label="Delete channel"
-          >
-            <Trash2 size={14} />
-          </button>
+    <article className={styles.channelCard} aria-labelledby={id + '-title'}>
+      <div className={styles.cardHead}>
+        <ChannelArtwork src={channel.thumbnail_url} className={styles.artwork} />
+        <div className={styles.identity}>
+          <span className={styles.visibility} data-visible={channel.is_active}>
+            <VisibilityIcon size={13} aria-hidden="true" />{channel.is_active ? 'Visible to children' : 'Hidden from children'}
+          </span>
+          <h3 id={id + '-title'}>{channel.title}</h3>
+          <p className={styles.metrics}>
+            {Number.isFinite(videoCount) && <span><b>{videoCount.toLocaleString()}</b> {videoCount === 1 ? 'video' : 'videos'}</span>}
+            {shortsCount != null && <span><b>{shortsCount.toLocaleString()}</b> {shortsCount === 1 ? 'Short' : 'Shorts'}</span>}
+          </p>
         </div>
       </div>
-
-      {/* Expandable Shorts Feed Settings Tray */}
-      {showShortsSettings && (
-        <div className="w-full pt-3 mt-1 border-t border-neutral-200/60 dark:border-white/[0.06] flex flex-col gap-3 animate-fade-in-up">
-          {/* Header & Toggle */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Zap size={14} className="text-brand-primary" />
-              <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                Shorts Feed Controls
-              </span>
-              <span className="text-[11px] text-[var(--color-text-secondary)]">
-                ({shortsFound} Shorts available)
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleToggleShorts}
-              className={cn(
-                'px-3 py-1 rounded-xl text-xs font-semibold transition-all',
-                shortsEnabled
-                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                  : 'bg-neutral-200 dark:bg-white/[0.06] text-neutral-500 border border-neutral-300 dark:border-white/[0.1]'
-              )}
-            >
-              {shortsEnabled ? 'Shorts Enabled' : 'Shorts Disabled'}
-            </button>
-          </div>
-
-          {/* Limit Presets */}
-          {shortsEnabled && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] text-[var(--color-text-secondary)]">
-                Include the latest N Shorts in the feed:
-              </p>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {[10, 25, 50, 100].map((preset) => {
-                  const isSelected = shortsLimit === preset;
-                  return (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => handleLimitPreset(preset)}
-                      className={cn(
-                        'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
-                        isSelected
-                          ? 'bg-brand-primary text-white border-brand-primary shadow-sm shadow-brand-primary/20'
-                          : 'bg-neutral-100 dark:bg-white/[0.04] border-neutral-200 dark:border-white/[0.07] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                      )}
-                    >
-                      {preset}
-                    </button>
-                  );
-                })}
-
-                {/* All Preset */}
-                <button
-                  type="button"
-                  onClick={() => handleLimitPreset(null)}
-                  className={cn(
-                    'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
-                    shortsLimit === null
-                      ? 'bg-brand-primary text-white border-brand-primary shadow-sm shadow-brand-primary/20'
-                      : 'bg-neutral-100 dark:bg-white/[0.04] border-neutral-200 dark:border-white/[0.07] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                  )}
-                >
-                  All
-                </button>
-
-                {/* Custom Number Input */}
-                {customInputOpen ? (
-                  <form onSubmit={handleCustomLimitSubmit} className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={1}
-                      max={5000}
-                      value={customLimitVal}
-                      onChange={(e) => setCustomLimitVal(e.target.value)}
-                      placeholder="e.g. 75"
-                      className="w-16 px-2 py-0.5 text-xs rounded-lg border border-brand-primary bg-surface-primary text-content-primary focus:outline-none"
-                      autoFocus
-                    />
-                    <button
-                      type="submit"
-                      className="px-2 py-0.5 rounded-lg text-xs font-semibold bg-brand-primary text-white shadow-sm"
-                    >
-                      Save
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCustomInputOpen(true)}
-                    className={cn(
-                      'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
-                      typeof shortsLimit === 'number' && ![10, 25, 50, 100].includes(shortsLimit)
-                        ? 'bg-brand-primary text-white border-brand-primary'
-                        : 'bg-neutral-100 dark:bg-white/[0.04] border-neutral-200 dark:border-white/[0.07] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                    )}
-                  >
-                    {typeof shortsLimit === 'number' && ![10, 25, 50, 100].includes(shortsLimit)
-                      ? `Custom (${shortsLimit})`
-                      : 'Custom…'}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+      <div className={styles.details}>
+        {syncTime ? (
+          <span><CircleCheck size={14} aria-hidden="true" /><time dateTime={channel.last_synced_at ?? undefined}>Synced {syncTime.toLowerCase()}</time></span>
+        ) : (
+          <span><Clock3 size={14} aria-hidden="true" />{channel.sync_status === 'complete' ? 'Synced' : 'Awaiting first sync'}</span>
+        )}
+        <span><Zap size={14} aria-hidden="true" />{enabled ? limit === null ? 'All Shorts' : 'Latest ' + limit.toLocaleString() + ' Shorts' : 'Shorts off'}</span>
+      </div>
+      <div className={styles.actions} role="group" aria-label={'Actions for ' + channel.title}>
+        <button type="button" aria-expanded={settingsOpen} aria-controls={id + '-shorts'} onClick={() => setSettingsOpen(!settingsOpen)}>
+          <SlidersHorizontal size={17} aria-hidden="true" />Shorts
+        </button>
+        <Link href={'/channels/' + channel.id} aria-label={'Open ' + channel.title}><ArrowUpRight size={18} aria-hidden="true" />Open</Link>
+        <button type="button" disabled={saving} onClick={() => void save(() => onToggleActive(channel))}>
+          {channel.is_active ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+          {channel.is_active ? 'Hide' : 'Show'}
+        </button>
+        <button type="button" disabled={busy || paused} onClick={() => onSync(channel)}>
+          <RefreshCw size={16} aria-hidden="true" className={busy ? styles.spinning : undefined} />Sync
+        </button>
+        <button type="button" disabled={saving} className={styles.remove} onClick={(event) => onDelete(channel, event.currentTarget)}>
+          <Trash2 size={16} aria-hidden="true" />Remove
+        </button>
+      </div>
+      <div id={id + '-shorts'} hidden={!settingsOpen} className={styles.tray}>
+        <div className={styles.trayHeader}>
+          <h4>Shorts feed</h4>
+          <button type="button" role="switch" aria-label="Include Shorts in the feed" aria-checked={enabled}
+            className={styles.switch} disabled={saving} onClick={() => void save(() => onUpdateShortsSettings(channel, !enabled, limit))}>
+            <span aria-hidden="true" />{enabled ? 'On' : 'Off'}
+          </button>
         </div>
-      )}
+        {enabled && (
+          <fieldset className={styles.limitGroup} disabled={saving}>
+            <legend>How many recent Shorts should appear?</legend>
+            <div className={styles.presets}>
+              {presets.map((preset) => (
+                <button type="button" key={preset ?? 'all'} aria-pressed={limit === preset} onClick={() => setLimit(preset)}>
+                  {preset ?? 'All'}
+                </button>
+              ))}
+              <button type="button" aria-expanded={customOpen} aria-pressed={customLimit} onClick={() => {
+                setCustomValue(limit === null ? '' : String(limit));
+                setCustomOpen(!customOpen);
+              }}>{customLimit ? 'Custom (' + limit + ')' : 'Custom'}</button>
+            </div>
+            {customOpen && (
+              <form onSubmit={saveCustom} className={styles.customLimit}>
+                <label htmlFor={id + '-limit'}>Custom limit (1–5,000)</label>
+                <div><input id={id + '-limit'} type="number" inputMode="numeric" min={1} max={5000} step={1}
+                  required value={customValue} onChange={(event) => setCustomValue(event.target.value)} />
+                  <button type="submit" className={styles.secondary}><Check size={15} aria-hidden="true" />Save</button></div>
+              </form>
+            )}
+          </fieldset>
+        )}
+      </div>
+      {saveError && <p role="alert" className={styles.rowError}>{saveError}</p>}
+      {progress && <ImportFeedback progress={progress} onResume={() => onSync(channel)} />}
+    </article>
+  );
+}
+
+function ImportFeedback({ progress, onResume }: { progress: ChannelImport; onResume: () => void }) {
+  const { phase, synced, total } = progress;
+  if (phase === 'finished' || phase === 'failed') {
+    return <p role="status" className={phase === 'failed' ? styles.rowError : styles.feedback}>{progress.message}</p>;
+  }
+  if (phase === 'paused') {
+    return <div className={styles.feedback}><span role="status">Video import paused.</span>
+      <button type="button" onClick={onResume} className={styles.secondary}>Continue import</button></div>;
+  }
+  const refreshing = phase === 'refreshing';
+  const percent = !refreshing && total > 0 && total >= synced ? Math.round(synced / total * 100) : undefined;
+  const label = refreshing ? 'Checking for new videos' : phase === 'retrying' ? 'Import interrupted. Retrying…' : 'Importing videos';
+  return (
+    <div className={styles.progress}>
+      <div className={styles.progressCaption}><strong role="status">{label}</strong>
+        {percent !== undefined && <span>{percent}%</span>}</div>
+      <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}
+        className={styles.track} data-indeterminate={percent === undefined}>
+        <span style={percent === undefined ? undefined : { width: percent + '%' }} />
+      </div>
+      {!refreshing && <p>{percent !== undefined
+        ? synced.toLocaleString() + ' of ' + total.toLocaleString() + ' videos imported'
+        : synced > 0 ? synced.toLocaleString() + ' videos imported so far' : 'Waiting for the first batch of videos.'}</p>}
     </div>
   );
 }
