@@ -96,6 +96,7 @@ export function YouTubePlayer({
   const [seekPreview, setSeekPreview] = useState(0);
   const isSeekingRef = useRef(false);
   const seekPreviewRef = useRef(0);
+  const isPlayerReadyRef = useRef(false);
   const useRotationFallbackRef = useRef(false);
   /* Item 6: Track whether we need the CSS rotation fallback (iOS Safari, etc.) */
   const [useRotationFallback, setUseRotationFallback] = useState(false);
@@ -224,6 +225,7 @@ export function YouTubePlayer({
     }
 
     let isMounted = true;
+    isPlayerReadyRef.current = false;
     setPlayerError(false);
     const playerElementId = `yt-player-${videoId}`;
 
@@ -256,6 +258,7 @@ export function YouTubePlayer({
         events: {
           onReady: (event: any) => {
             if (!isMounted) return;
+            isPlayerReadyRef.current = true;
             playerRef.current = event.target;
             const dur = event.target.getDuration();
             if (dur) setDuration(dur);
@@ -293,6 +296,12 @@ export function YouTubePlayer({
               setShowControls(true);
               flushHeartbeat();
               if (onEnded) onEnded();
+            } else if (event.data === 5 || (event.data === -1 && isPlayerReadyRef.current)) {
+              setIsPlaying(false);
+              setIsBuffering(false);
+              setShowControls(true);
+            } else if (event.data === -1) {
+              setIsPlaying(false);
             }
           },
           onError: (event: any) => {
@@ -565,6 +574,28 @@ export function YouTubePlayer({
   }, []);
 
 
+  /* ── Resume / start playback from center play button ── */
+  const handlePlayResume = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const player = playerRef.current;
+    if (!player) return;
+
+    try {
+      const state = typeof player.getPlayerState === 'function' ? player.getPlayerState() : undefined;
+      if (state === 0 && typeof player.seekTo === 'function') {
+        player.seekTo(0, true);
+      }
+      if (typeof player.playVideo === 'function') {
+        player.playVideo();
+      }
+      scheduleHideControls();
+    } catch (err) {
+      console.warn('[YouTubePlayer] Failed to resume playback:', err);
+    }
+  }, [scheduleHideControls]);
+
   /* ── Item 9: Skip ±10s ── */
   const skipTime = (delta: number) => {
     if (!playerRef.current) return;
@@ -744,7 +775,7 @@ export function YouTubePlayer({
         <div
           key={skipAnim.key}
           className={cn(
-            'absolute z-15 pointer-events-none flex items-center justify-center',
+            'absolute z-20 pointer-events-none flex items-center justify-center',
             'animate-in fade-in zoom-in-75 duration-300',
             skipAnim.side === 'left' ? 'inset-y-0 left-0 w-1/2' : 'inset-y-0 right-0 w-1/2'
           )}
@@ -760,19 +791,25 @@ export function YouTubePlayer({
 
       {/* ── 3. Buffering / Loading Spinner ── */}
       {isBuffering && !playerError && (
-        <div className="absolute inset-0 z-15 pointer-events-none flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
           <Loader2 className="h-12 w-12 text-brand-primary animate-spin" />
         </div>
       )}
 
-      {/* ── 3a. Paused visual indicator ── */}
+      {/* ── 3a. Paused / Stopped Play Button — clickable to resume or start playback ── */}
       {!isPlaying && !isBuffering && !playerError && (
-        <div className="absolute inset-0 z-15 pointer-events-none flex items-center justify-center">
-          <div className="h-16 w-16 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-xl">
+        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
+          <button
+            type="button"
+            onClick={handlePlayResume}
+            aria-label="Play video"
+            title="Play video"
+            className="pointer-events-auto h-16 w-16 rounded-full bg-black/60 hover:bg-black/75 active:scale-95 backdrop-blur-sm border border-white/25 flex items-center justify-center shadow-xl transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+          >
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-white translate-x-0.5">
               <polygon points="5,3 19,12 5,21" />
             </svg>
-          </div>
+          </button>
         </div>
       )}
 
