@@ -3,17 +3,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { PageShell } from '@/components/layout/PageShell';
-import { VideoCardSkeleton } from '@/components/cards/VideoCard';
+import { VideoCard, VideoCardSkeleton } from '@/components/cards/VideoCard';
 import { VirtualizedVideoGrid } from '@/components/video/VirtualizedVideoGrid';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { Tv2, Plus, Loader2, RefreshCw } from 'lucide-react';
+import { Tv2, Plus, Loader2, RefreshCw, Shuffle, Sparkles, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Video } from '@/types/content';
 import { cn } from '@/lib/cn';
 
-
 export default function HomePage() {
   const { role, initialized } = useAuthStore();
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -56,12 +57,14 @@ export default function HomePage() {
         }
 
         const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Feed request failed (${res.status})`);
+        }
         const data = await res.json();
 
         if (data.videos) {
           if (append) {
             setVideos((prev) => {
-              // Deduplicate any video already in state by id
               const existingIds = new Set(prev.map((v) => v.id));
               const newItems = data.videos.filter((v: Video) => !existingIds.has(v.id));
               return [...prev, ...newItems];
@@ -71,7 +74,7 @@ export default function HomePage() {
           }
 
           setHasMore(Boolean(data.hasMore));
-          setAllChannelsSynced(data.allChannelsSynced !== false); // default true for legacy responses
+          setAllChannelsSynced(data.allChannelsSynced !== false);
           nextCursorRef.current = data.nextCursor || null;
           setPage(pageNum);
           pageRef.current = pageNum;
@@ -79,7 +82,7 @@ export default function HomePage() {
         }
       } catch (err: any) {
         console.error('Failed to load home feed:', err);
-        setFetchError(err?.message || 'Failed to load videos. Tap to retry.');
+        setFetchError(err?.message || 'Could not load videos. Please try again.');
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -99,8 +102,6 @@ export default function HomePage() {
     }
   }, [initialized, seed, fetchFeed]);
 
-  // Pagination callback — triggered by VirtualizedVideoGrid's built-in
-  // scroll-position-aware detection when the user approaches the end of loaded content
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     setFetchError(null);
@@ -137,37 +138,62 @@ export default function HomePage() {
           );
         });
 
+  // Mobile (<768px): give the first video a hero slot so viewers have a clear starting point,
+  // followed by a 2-column grid to compare videos at a glance.
+  const showMobileHero = !isDesktop && filteredVideos.length > 0;
+  const heroVideo = showMobileHero ? filteredVideos[0] : null;
+  const gridVideos = showMobileHero ? filteredVideos.slice(1) : filteredVideos;
+
   return (
     <PageShell>
       <div className="space-y-4 pb-16">
-        {/* Category chip bar with Refresh shuffle button */}
-        <div className="flex items-center justify-between gap-3">
-          <CategoryChips activeCategory={activeCategory} onSelect={setActiveCategory} />
-          {videos.length > 0 && (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={loading}
-              className={cn(
-                'shrink-0 p-2 rounded-full transition-all duration-200 active:scale-90',
-                'text-[var(--color-text-secondary)] hover:text-red-500 dark:hover:text-red-400',
-                'hover:bg-red-500/8 dark:hover:bg-red-500/12',
-                loading && 'opacity-60'
-              )}
-              title="Shuffle feed"
-            >
-              <RefreshCw size={15} className={cn(loading && 'animate-spin')} />
-            </button>
-          )}
+        {/* Category Navigation + Labelled Shuffle */}
+        <div className="flex items-center gap-2">
+          <CategoryChips
+            activeCategory={activeCategory}
+            onSelect={setActiveCategory}
+            onShuffle={handleRefresh}
+            isShuffling={loading}
+            showShuffle={videos.length > 0}
+          />
         </div>
 
-        {/* Video Card Grid — Virtualized with look-ahead pagination */}
-        <section aria-label="Videos feed" className="mt-2">
+        {/* Video Feed */}
+        <section aria-label="Videos feed" className="space-y-5">
           {loading ? (
-            <div className="md:mx-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-0 md:gap-4 lg:gap-5 gap-y-6">
-              <VideoCardSkeleton count={12} />
+            <div className="space-y-5">
+              {/* Mobile Hero Skeleton */}
+              <div className="md:hidden">
+                <VideoCardSkeleton count={1} layout="hero" />
+              </div>
+              {/* Responsive Grid Skeleton */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 lg:gap-5 gap-y-5">
+                <VideoCardSkeleton count={10} />
+              </div>
             </div>
-          ) : filteredVideos.length === 0 ? (
+          ) : fetchError && videos.length === 0 ? (
+            <div className="flex items-center justify-center min-h-[50dvh]">
+              <div className="max-w-md w-full text-center space-y-4 p-6 rounded-3xl bg-[var(--color-bg-elevated)] border border-[var(--color-border)]">
+                <div className="mx-auto h-12 w-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500">
+                  <AlertCircle size={24} />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="font-display font-bold text-lg text-[var(--color-text-primary)]">
+                    Could not load your feed
+                  </h2>
+                  <p className="text-sm text-[var(--color-text-secondary)]">{fetchError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchFeed(1, false, seedRef.current, null)}
+                  className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#b43d2d] text-white hover:bg-[#9b3024] active:scale-95 transition-all"
+                >
+                  <RefreshCw size={15} />
+                  <span>Try Again</span>
+                </button>
+              </div>
+            </div>
+          ) : videos.length === 0 ? (
             <div className="flex items-center justify-center min-h-[50dvh]">
               <div className="max-w-md w-full text-center space-y-4">
                 <EmptyState
@@ -183,7 +209,7 @@ export default function HomePage() {
                   <div className="pt-2">
                     <Link
                       href="/settings/manage-channels"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-brand-primary text-white shadow-lg shadow-brand-primary/20 hover:bg-brand-primary/90 active:scale-95 transition-all"
+                      className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#b43d2d] text-white shadow-sm hover:bg-[#9b3024] active:scale-95 transition-all"
                     >
                       <Plus size={16} />
                       <span>Manage &amp; Add Channels</span>
@@ -192,13 +218,67 @@ export default function HomePage() {
                 )}
               </div>
             </div>
+          ) : filteredVideos.length === 0 ? (
+            /* Empty category state when feed has videos, but none match the selected category */
+            <div className="flex items-center justify-center min-h-[42dvh]">
+              <div className="max-w-md w-full text-center space-y-4 p-6 rounded-3xl bg-[var(--color-bg-elevated)] border border-[var(--color-border)]">
+                <div className="mx-auto h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                  <Sparkles size={22} />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="font-display font-bold text-lg text-[var(--color-text-primary)]">
+                    No {activeCategory} videos right now
+                  </h2>
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    None of the currently loaded videos match &ldquo;{activeCategory}&rdquo;. Show all videos or shuffle for a fresh mix.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategory('All')}
+                    className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#b43d2d] text-white hover:bg-[#9b3024] active:scale-95 transition-all"
+                  >
+                    <span>Show All Videos</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-semibold bg-[var(--color-bg-secondary)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:border-red-400/50 active:scale-95 transition-all"
+                  >
+                    <Shuffle size={15} />
+                    <span>Shuffle Feed</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
-            <VirtualizedVideoGrid
-              videos={filteredVideos}
-              onLoadMore={handleLoadMore}
-              hasMore={hasMore}
-              isLoading={loadingMore}
-            />
+            <>
+              {/* Mobile Hero Slot */}
+              {heroVideo && (
+                <div className="md:hidden space-y-2">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#9c3529] dark:text-[#ffad95]">
+                      {activeCategory === 'All' ? 'Featured Pick' : `${activeCategory} Pick`}
+                    </span>
+                    <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">
+                      {filteredVideos.length} videos
+                    </span>
+                  </div>
+                  <VideoCard video={heroVideo} layout="hero" />
+                </div>
+              )}
+
+              {/* Remaining Videos in 2-col Mobile / 3-6 col Desktop Virtualized Grid */}
+              {gridVideos.length > 0 && (
+                <VirtualizedVideoGrid
+                  videos={gridVideos}
+                  onLoadMore={handleLoadMore}
+                  hasMore={hasMore}
+                  isLoading={loadingMore}
+                />
+              )}
+            </>
           )}
 
           {/* Continuous look-ahead pre-load indicator */}
@@ -211,8 +291,8 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Fetch error with retry (Fix 4.4) */}
-          {fetchError && !loading && !loadingMore && (
+          {/* Pagination error with retry */}
+          {fetchError && videos.length > 0 && !loading && !loadingMore && (
             <div className="pt-6 pb-4 flex flex-col items-center gap-3">
               <p className="text-fluid-sm text-red-500 dark:text-red-400 font-medium">
                 {fetchError}
@@ -220,7 +300,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={handleLoadMore}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-fluid-sm font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all"
               >
                 <RefreshCw size={14} />
                 <span>Retry</span>
@@ -228,23 +308,21 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Manual load-more fallback — visible when auto-pagination hasn't triggered (Fix 4.4) */}
-          {hasMore && !loadingMore && !loading && !fetchError && (
+          {/* Manual load-more fallback */}
+          {hasMore && !loadingMore && !loading && !fetchError && filteredVideos.length > 0 && (
             <div className="pt-4 pb-2 flex justify-center">
               <button
                 type="button"
                 onClick={handleLoadMore}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-fluid-sm font-semibold bg-surface-secondary border border-border text-content-secondary hover:border-brand-primary/50 hover:text-brand-primary active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-fluid-sm font-semibold bg-[var(--color-bg-secondary)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-red-500/50 hover:text-red-600 dark:hover:text-red-400 active:scale-95 transition-all"
               >
                 <span>Load More Videos</span>
               </button>
             </div>
           )}
 
-          {/* THREE-STATE END MESSAGES */}
-
-          {/* State 1: Importing — some channels haven't finished ingestion */}
-          {!hasMore && !loading && videos.length > 0 && !allChannelsSynced && (
+          {/* End states */}
+          {!hasMore && !loading && filteredVideos.length > 0 && !allChannelsSynced && (
             <div className="pt-6 pb-4 flex flex-col items-center gap-2">
               <div className="flex items-center gap-2 text-amber-500">
                 <Loader2 size={14} className="animate-spin" />
@@ -255,8 +333,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* State 2: Genuine end — all channels fully synced AND no more DB rows */}
-          {!hasMore && !loading && videos.length > 0 && allChannelsSynced && (
+          {!hasMore && !loading && filteredVideos.length > 0 && allChannelsSynced && (
             <div className="pt-6 pb-4 flex justify-center">
               <p className="text-[11px] font-medium text-[var(--color-text-disabled)] tracking-wide uppercase">
                 — You&apos;ve reached the end of your feed —
@@ -283,9 +360,15 @@ const CATEGORY_EMOJIS: Record<string, string> = {
 function CategoryChips({
   activeCategory,
   onSelect,
+  onShuffle,
+  isShuffling,
+  showShuffle,
 }: {
   activeCategory: string;
   onSelect: (cat: string) => void;
+  onShuffle: () => void;
+  isShuffling: boolean;
+  showShuffle: boolean;
 }) {
   const categories = ['All', 'Bhajans', 'Stories', 'Education', 'Cartoons', 'Nature', 'Festivals', 'Yoga'];
 
@@ -293,7 +376,7 @@ function CategoryChips({
     <nav aria-label="Content categories" className="relative flex-1 min-w-0">
       <ul
         role="list"
-        className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1"
+        className="flex items-center gap-2 overflow-x-auto md:flex-wrap pb-1.5 scrollbar-hide -mx-1 px-1"
         style={{ scrollbarWidth: 'none' }}
       >
         {categories.map((cat) => {
@@ -304,31 +387,49 @@ function CategoryChips({
                 type="button"
                 onClick={() => onSelect(cat)}
                 className={cn(
-                  'px-3.5 py-[6px] rounded-full text-[12px] font-semibold transition-all duration-200 whitespace-nowrap flex items-center gap-1.5',
+                  'relative min-h-[38px] px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold transition-all duration-200 whitespace-nowrap flex items-center gap-1.5',
                   'focus-visible:ring-2 focus-visible:ring-red-500/60 active:scale-95',
                   isSelected
                     ? [
-                        'bg-gradient-to-r from-red-500 to-rose-600 text-white',
-                        'shadow-[0_3px_14px_rgba(229,57,53,0.40)] dark:shadow-[0_3px_18px_rgba(229,57,53,0.50)]',
-                        'border border-transparent',
+                        'bg-[#74382f] text-[#fff7ef] dark:bg-[#f1c1a6] dark:text-[#342129]',
+                        'shadow-sm border border-transparent',
                       ]
                     : [
-                        'bg-white/70 dark:bg-white/[0.05] backdrop-blur-sm',
-                        'border border-neutral-200/80 dark:border-white/[0.08]',
+                        'bg-[var(--color-bg-elevated)]',
+                        'border border-[var(--color-border)]',
                         'text-[var(--color-text-secondary)]',
-                        'hover:bg-white dark:hover:bg-white/[0.09] hover:text-[var(--color-text-primary)]',
-                        'hover:border-neutral-300/80 dark:hover:border-white/[0.14]',
-                        'hover:shadow-sm dark:hover:shadow-black/20',
+                        'hover:text-[var(--color-text-primary)] hover:border-neutral-400/70 dark:hover:border-white/20',
                       ]
                 )}
                 aria-pressed={isSelected}
               >
-                <span className="text-[11px] leading-none">{CATEGORY_EMOJIS[cat]}</span>
+                <span className="text-[12px] leading-none" aria-hidden="true">{CATEGORY_EMOJIS[cat]}</span>
                 <span>{cat}</span>
               </button>
             </li>
           );
         })}
+
+        {showShuffle && (
+          <li className="shrink-0 ml-auto md:ml-1">
+            <button
+              type="button"
+              onClick={onShuffle}
+              disabled={isShuffling}
+              className={cn(
+                'min-h-[38px] px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold transition-all duration-200 whitespace-nowrap flex items-center gap-1.5',
+                'bg-[var(--color-bg-secondary)] border border-[var(--color-border)]',
+                'text-[var(--color-text-primary)] hover:border-[#903d30]/50 dark:hover:border-[#f2b59a]/50',
+                'focus-visible:ring-2 focus-visible:ring-red-500/60 active:scale-95',
+                isShuffling && 'opacity-60'
+              )}
+              title="Shuffle feed"
+            >
+              <Shuffle size={13} className={cn('text-[#903d30] dark:text-[#f2b59a]', isShuffling && 'animate-spin')} />
+              <span>Shuffle</span>
+            </button>
+          </li>
+        )}
       </ul>
     </nav>
   );

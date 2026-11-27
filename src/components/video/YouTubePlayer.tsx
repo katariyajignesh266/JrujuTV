@@ -94,8 +94,14 @@ export function YouTubePlayer({
   const [playerError, setPlayerError] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekPreview, setSeekPreview] = useState(0);
+  const isSeekingRef = useRef(false);
+  const seekPreviewRef = useRef(0);
+  const useRotationFallbackRef = useRef(false);
   /* Item 6: Track whether we need the CSS rotation fallback (iOS Safari, etc.) */
   const [useRotationFallback, setUseRotationFallback] = useState(false);
+  useEffect(() => {
+    useRotationFallbackRef.current = useRotationFallback;
+  }, [useRotationFallback]);
   /* Item 9: Skip overlay animation state */
   const [skipAnim, setSkipAnim] = useState<{ side: 'left' | 'right'; key: number } | null>(null);
   /* Item 9: Double-tap tracking */
@@ -594,34 +600,46 @@ export function YouTubePlayer({
     }
   };
 
-  /* ── Item 8: Custom progress bar seek handling ── */
-  const getSeekPositionFromEvent = (clientX: number): number => {
+  /* ── Item 8: Custom progress bar seek handling (supports 90deg rotated fullscreen fallback) ── */
+  const getSeekPositionFromEvent = (clientX: number, clientY: number): number => {
     if (!progressBarRef.current || duration <= 0) return 0;
     const rect = progressBarRef.current.getBoundingClientRect();
-    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    let fraction: number;
+    if (useRotationFallbackRef.current) {
+      // Container is rotated 90deg clockwise: visual left-to-right is viewport top-to-bottom
+      fraction = rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
+    } else {
+      fraction = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+    }
+    fraction = Math.max(0, Math.min(1, fraction));
     return fraction * duration;
   };
 
-  const handleSeekStart = (clientX: number) => {
+  const handleSeekStart = (clientX: number, clientY: number) => {
     flushHeartbeat();
+    isSeekingRef.current = true;
     setIsSeeking(true);
-    const time = getSeekPositionFromEvent(clientX);
+    const time = getSeekPositionFromEvent(clientX, clientY);
+    seekPreviewRef.current = time;
     setSeekPreview(time);
     setCurrentTime(time);
   };
 
-  const handleSeekMove = (clientX: number) => {
-    if (!isSeeking) return;
-    const time = getSeekPositionFromEvent(clientX);
+  const handleSeekMove = (clientX: number, clientY: number) => {
+    if (!isSeekingRef.current) return;
+    const time = getSeekPositionFromEvent(clientX, clientY);
+    seekPreviewRef.current = time;
     setSeekPreview(time);
     setCurrentTime(time);
   };
 
   const handleSeekEnd = () => {
-    if (!isSeeking) return;
+    if (!isSeekingRef.current) return;
+    isSeekingRef.current = false;
     setIsSeeking(false);
+    const targetTime = seekPreviewRef.current;
     if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
-      playerRef.current.seekTo(seekPreview, true);
+      playerRef.current.seekTo(targetTime, true);
     }
   };
 
@@ -629,8 +647,8 @@ export function YouTubePlayer({
   const onProgressMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    handleSeekStart(e.clientX);
-    const onMove = (ev: MouseEvent) => handleSeekMove(ev.clientX);
+    handleSeekStart(e.clientX, e.clientY);
+    const onMove = (ev: MouseEvent) => handleSeekMove(ev.clientX, ev.clientY);
     const onUp = () => {
       handleSeekEnd();
       window.removeEventListener('mousemove', onMove);
@@ -644,13 +662,13 @@ export function YouTubePlayer({
   const onProgressTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation();
     const touch = e.touches[0];
-    handleSeekStart(touch.clientX);
+    if (touch) handleSeekStart(touch.clientX, touch.clientY);
   };
 
   const onProgressTouchMove = (e: React.TouchEvent) => {
     e.stopPropagation();
     const touch = e.touches[0];
-    handleSeekMove(touch.clientX);
+    if (touch) handleSeekMove(touch.clientX, touch.clientY);
   };
 
   const onProgressTouchEnd = (e: React.TouchEvent) => {
@@ -747,6 +765,17 @@ export function YouTubePlayer({
         </div>
       )}
 
+      {/* ── 3a. Paused visual indicator ── */}
+      {!isPlaying && !isBuffering && !playerError && (
+        <div className="absolute inset-0 z-15 pointer-events-none flex items-center justify-center">
+          <div className="h-16 w-16 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-xl">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-white translate-x-0.5">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+          </div>
+        </div>
+      )}
+
       {/* ── 3b. Player Error Overlay ── */}
       {playerError && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 text-white p-6 text-center space-y-2">
@@ -757,17 +786,17 @@ export function YouTubePlayer({
         </div>
       )}
 
-      {/* ── 4. Custom Control Bar — Item 5: No play/pause button ── */}
+      {/* ── 4. Custom Control Bar — high contrast over bright & dark footage ── */}
       <div
         className={cn(
-          'absolute inset-x-0 bottom-0 z-20 flex flex-col justify-end p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 pointer-events-auto',
+          'player-controls absolute inset-x-0 bottom-0 z-20 flex flex-col justify-end p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/65 to-transparent transition-opacity duration-300 pointer-events-auto',
           showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
       >
-        {/* ── Item 8: Custom continuous progress bar with filled red segment ── */}
+        {/* ── Item 8: Custom continuous progress bar with generous touch target ── */}
         <div
           ref={progressBarRef}
-          className="relative w-full h-6 flex items-center cursor-pointer mb-1 group/scrub"
+          className="relative w-full h-8 flex items-center cursor-pointer touch-none mb-1 group/scrub"
           onMouseDown={onProgressMouseDown}
           onTouchStart={onProgressTouchStart}
           onTouchMove={onProgressTouchMove}
@@ -779,17 +808,17 @@ export function YouTubePlayer({
           aria-valuenow={currentTime}
         >
           {/* Track background */}
-          <div className="absolute left-0 right-0 h-1 group-hover/scrub:h-1.5 rounded-full bg-white/25 transition-all" />
+          <div className="absolute left-0 right-0 h-1.5 group-hover/scrub:h-2 rounded-full bg-white/30 transition-all shadow-xs" />
           {/* Filled segment (red) */}
           <div
-            className="absolute left-0 h-1 group-hover/scrub:h-1.5 rounded-full bg-red-600 transition-all"
+            className="absolute left-0 h-1.5 group-hover/scrub:h-2 rounded-full bg-red-600 transition-all"
             style={{ width: `${progressFraction}%` }}
           />
           {/* Scrub handle */}
           <div
             className={cn(
-              'absolute h-3.5 w-3.5 rounded-full bg-red-600 border-2 border-white shadow-md -translate-x-1/2 transition-transform',
-              'opacity-0 group-hover/scrub:opacity-100',
+              'absolute h-4 w-4 rounded-full bg-red-600 border-2 border-white shadow-md -translate-x-1/2 transition-transform',
+              'opacity-80 sm:opacity-0 group-hover/scrub:opacity-100',
               isSeeking && 'opacity-100 scale-125'
             )}
             style={{ left: `${progressFraction}%` }}
@@ -798,13 +827,13 @@ export function YouTubePlayer({
 
         {/* Buttons and Time */}
         <div className="flex items-center justify-between gap-2 text-white text-xs sm:text-sm">
-          {/* Left group — Item 5: Skip controls only, NO play/pause */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Left group */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
             {/* Skip -10s */}
             <button
               type="button"
               onClick={() => skipTime(-10)}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/90 hover:text-white"
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-black/30 hover:bg-white/15 active:scale-95 transition-all text-white drop-shadow"
               title="Back 10 seconds"
               aria-label="Skip backward 10 seconds"
             >
@@ -815,7 +844,7 @@ export function YouTubePlayer({
             <button
               type="button"
               onClick={() => skipTime(10)}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/90 hover:text-white"
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-black/30 hover:bg-white/15 active:scale-95 transition-all text-white drop-shadow"
               title="Forward 10 seconds"
               aria-label="Skip forward 10 seconds"
             >
@@ -827,24 +856,27 @@ export function YouTubePlayer({
               <button
                 type="button"
                 onClick={toggleMute}
-                className="p-1.5 sm:p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/90 hover:text-white"
+                className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-black/30 hover:bg-white/15 active:scale-95 transition-all text-white drop-shadow"
                 title={isMuted ? 'Unmute' : 'Mute'}
                 aria-label={isMuted ? 'Unmute' : 'Mute'}
               >
                 {isMuted || volume === 0 ? <VolumeX size={19} /> : <Volume2 size={19} />}
               </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="w-14 sm:w-20 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-brand-primary hidden sm:block"
-              />
+              {!useRotationFallback && (
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  aria-label="Volume"
+                  className="w-14 sm:w-20 h-1.5 bg-white/35 rounded-lg appearance-none cursor-pointer accent-brand-primary hidden sm:block"
+                />
+              )}
             </div>
 
             {/* Time Stamp */}
-            <span className="text-[11px] sm:text-xs font-mono font-medium text-white/90 pl-1">
+            <span className="text-[11px] sm:text-xs font-mono font-semibold text-white drop-shadow pl-1 tabular-nums">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
@@ -854,7 +886,7 @@ export function YouTubePlayer({
             <button
               type="button"
               onClick={toggleFullscreen}
-              className="p-1.5 sm:p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/90 hover:text-white"
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl bg-black/30 hover:bg-white/15 active:scale-95 transition-all text-white drop-shadow"
               title={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             >

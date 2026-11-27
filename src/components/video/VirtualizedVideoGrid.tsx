@@ -68,7 +68,7 @@ export function VirtualizedVideoGrid({
       setIsDesktopLayout(window.innerWidth >= 768);
 
       if (window.innerWidth < 768) {
-        return 1;
+        return width >= 300 ? 2 : 1;
       }
 
       // Desktop/tablet container width-based responsive column calculation:
@@ -122,9 +122,10 @@ export function VirtualizedVideoGrid({
   // Dynamic row height estimation based on column count
   const estimatedRowHeight = useMemo(() => {
     if (columns === 1) return 320;
+    if (columns === 2 && !isDesktopLayout) return 215;
     if (columns >= 4) return 300;
     return 330;
-  }, [columns]);
+  }, [columns, isDesktopLayout]);
 
   // 1. Desktop virtualizer (mounts to <main id="main-content"> scroll container)
   const elementVirtualizer = useVirtualizer({
@@ -211,7 +212,7 @@ export function VirtualizedVideoGrid({
           >
             {/* Fluid CSS grid with dynamic inline columns strictly matching rows splitting */}
             <div
-              className="md:mx-0 grid gap-0 md:gap-4 lg:gap-5 gap-y-6 pb-6"
+              className="md:mx-0 grid gap-3 md:gap-4 lg:gap-5 gap-y-5 md:gap-y-6 pb-5 md:pb-6"
               style={{
                 gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
               }}

@@ -290,6 +290,18 @@ select:focus-visible {
     background-color: #000000 !important;
   }
 
+  .player-rotate-landscape .player-controls {
+    padding-bottom: max(env(safe-area-inset-right), 12px);
+    padding-left: max(env(safe-area-inset-top), 14px);
+    padding-right: max(env(safe-area-inset-bottom), 14px);
+  }
+
+  /* Gujarati & mixed-script comfortable line-height */
+  .text-gujarati {
+    line-height: 1.55;
+    letter-spacing: 0;
+  }
+
   /* ─── Shorts Micro-Animations ─────────────────────────────────────── */
   @keyframes scaleFade {
     0% { transform: scale(0.6); opacity: 0; }

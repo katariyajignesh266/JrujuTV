@@ -24,7 +24,7 @@ export function PageShell({ children, className, fullWidth }: PageShellProps) {
         className={cn(
           'transition-all duration-300 ease-in-out',
           // Mobile (<768px): add bottom padding for the tab bar + safe area, normal natural scroll
-          'pb-[calc(56px+env(safe-area-inset-bottom))] w-full max-w-full overflow-x-hidden',
+          'pb-[calc(56px+env(safe-area-inset-bottom))] w-full md:w-auto max-w-full overflow-x-hidden',
           // Tablet & Desktop (>=768px): independent contained scroll shell below fixed 56px header
           'md:fixed md:top-14 md:bottom-0 md:right-0 md:overflow-y-auto md:overscroll-y-contain md:pb-8',
           '[scrollbar-gutter:stable]',

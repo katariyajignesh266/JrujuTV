@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Tv2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Video } from '@/types/content';
 import { formatViewCount, formatRelativeTime, formatDuration } from '@/lib/formatters';
@@ -18,7 +19,7 @@ interface VideoCardProps {
   duration?: string;
   thumbnailUrl?: string;
   skeleton?: boolean;
-  layout?: 'grid' | 'row';
+  layout?: 'grid' | 'row' | 'hero';
 }
 
 export function VideoCard({
@@ -36,6 +37,8 @@ export function VideoCard({
   layout = 'grid',
 }: VideoCardProps) {
   const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const activeVideoId = video?.youtube_video_id || video?.id || youtubeVideoId || id;
   const activeTitle = video?.title || title;
@@ -50,91 +53,125 @@ export function VideoCard({
   const formattedViews = activeViews !== undefined ? formatViewCount(activeViews) : '';
 
   const isLoading = skeleton || !activeTitle;
+  const isHero = layout === 'hero';
+  const isRow = layout === 'row';
+  const isGrid = layout === 'grid';
 
   const content = (
     <article
       className={cn(
-        'group flex',
-        layout === 'grid' ? 'flex-col gap-3' : 'flex-row items-start gap-2.5 sm:gap-3',
-        'overflow-hidden',
-        'transition-all duration-300',
-        'cursor-pointer w-full',
-        layout === 'grid' && !isLoading && 'hover:-translate-y-0.5',
-        layout === 'row' && !isLoading && 'p-1.5 -m-1.5 rounded-2xl hover:bg-neutral-900/5 dark:hover:bg-white/[0.04]'
+        'group flex min-w-0 w-full cursor-pointer transition-all duration-200',
+        isHero && 'flex-col gap-3 rounded-2xl p-2.5 sm:p-3 bg-[var(--color-bg-elevated)] border border-[var(--color-border)]/80 shadow-sm hover:shadow-md',
+        isGrid && 'flex-col gap-2 sm:gap-2.5',
+        isRow && 'flex-row items-start gap-2.5 sm:gap-3 p-1.5 -m-1.5 rounded-2xl hover:bg-neutral-900/5 dark:hover:bg-white/[0.04]',
+        isGrid && !isLoading && 'hover:-translate-y-0.5'
       )}
       aria-label={isLoading ? 'Loading video' : `Video: ${activeTitle}`}
     >
       {/* Thumbnail Container — Strict 16:9 aspect ratio */}
       <div
         className={cn(
-          'relative aspect-video overflow-hidden shrink-0 bg-neutral-900 rounded-xl',
-          layout === 'row' ? 'w-[140px] sm:w-[155px] md:w-[168px] rounded-xl' : 'w-full rounded-xl',
+          'relative aspect-video overflow-hidden shrink-0 bg-neutral-900',
+          isHero && 'w-full rounded-xl',
+          isGrid && 'w-full rounded-xl',
+          isRow && 'w-[136px] sm:w-[155px] md:w-[168px] rounded-xl',
           isLoading && 'animate-pulse bg-[var(--color-bg-secondary)]',
           !isLoading && 'shadow-xs group-hover:shadow-md transition-shadow duration-300'
         )}
       >
         {/* Shimmer Placeholder before image loads */}
-        {!thumbLoaded && !isLoading && (
+        {!thumbLoaded && !thumbError && !isLoading && (
           <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 animate-pulse" />
         )}
 
-        {activeThumb && !isLoading && (
+        {/* Missing / broken artwork fallback */}
+        {(!activeThumb || thumbError) && !isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-[#2d1a24] via-[#1c131d] to-[#120e16] text-white/70 p-3 text-center">
+            <Tv2 className={cn(isRow ? 'h-5 w-5' : 'h-8 w-8', 'text-rose-300/70')} />
+            {!isRow && (
+              <span className="text-[11px] font-medium text-white/60 line-clamp-1 max-w-[85%]">
+                {activeChannelName || 'JruJu TV'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {activeThumb && !thumbError && !isLoading && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={activeThumb}
             alt={activeTitle ?? ''}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.04]',
+              'absolute inset-0 w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]',
               thumbLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
             )}
-            loading="lazy"
+            loading={isHero ? 'eager' : 'lazy'}
             decoding="async"
             onLoad={() => setThumbLoaded(true)}
+            onError={() => {
+              setThumbError(true);
+              setThumbLoaded(true);
+            }}
           />
         )}
 
-        {/* Hover play overlay */}
-        {!isLoading && thumbLoaded && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
-            <div className={cn(
-              'rounded-full bg-white/95 dark:bg-white/90 flex items-center justify-center scale-0 group-hover:scale-100 transition-all duration-300 shadow-xl',
-              layout === 'row' ? 'h-8 w-8' : 'h-11 w-11'
-            )}>
-              <svg viewBox="0 0 24 24" fill="currentColor" className={cn('text-neutral-900 translate-x-0.5', layout === 'row' ? 'w-3.5 h-3.5' : 'w-5 h-5')}>
+        {/* Hover play overlay (desktop/pointer) */}
+        {!isLoading && thumbLoaded && !thumbError && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-all duration-300 flex items-center justify-center">
+            <div
+              className={cn(
+                'rounded-full bg-white/95 flex items-center justify-center scale-0 group-hover:scale-100 transition-all duration-200 shadow-xl',
+                isHero ? 'h-14 w-14' : isRow ? 'h-8 w-8' : 'h-11 w-11'
+              )}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className={cn(
+                  'text-neutral-900 translate-x-0.5',
+                  isHero ? 'w-6 h-6' : isRow ? 'w-3.5 h-3.5' : 'w-5 h-5'
+                )}
+              >
                 <polygon points="5,3 19,12 5,21" />
               </svg>
             </div>
           </div>
         )}
 
-        {/* Duration badge */}
+        {/* Duration badge — high contrast, crisp, never clips content */}
         {activeDuration && !isLoading && (
           <span
-            className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/85 backdrop-blur-xs text-white text-[9.5px] font-bold tracking-wide z-10 shadow-xs"
+            className={cn(
+              'absolute bottom-1.5 right-1.5 rounded-md bg-black/85 backdrop-blur-xs text-white font-bold tracking-wide z-10 shadow-xs tabular-nums',
+              isHero ? 'px-2 py-0.5 text-[11px]' : 'px-1.5 py-0.5 text-[10px]'
+            )}
             aria-label={`Duration: ${activeDuration}`}
           >
             {activeDuration}
           </span>
         )}
-
-        {/* Top-left shimmer line on hover */}
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
       </div>
 
       {/* Info Details */}
-      <div className={cn('flex min-w-0 flex-1', layout === 'grid' ? 'gap-2.5 px-1 sm:px-0.5' : 'flex-col gap-1 py-0')}>
-        {/* Channel avatar only for grid layout */}
-        {layout === 'grid' && (
+      <div
+        className={cn(
+          'flex min-w-0 flex-1',
+          isHero && 'gap-3 items-start px-0.5',
+          isGrid && 'gap-2.5 px-0.5',
+          isRow && 'flex-col gap-1 py-0'
+        )}
+      >
+        {/* Channel avatar: always shown on Hero, shown on sm+ for Grid (to give 2-col mobile titles full width) */}
+        {(isHero || isGrid) && (
           <div
             className={cn(
-              'h-9 w-9 rounded-full shrink-0 overflow-hidden border border-[var(--color-border)]',
-              'bg-[var(--color-bg-secondary)]',
-              'shadow-xs group-hover:shadow-md group-hover:border-red-400/40 dark:group-hover:border-red-400/30 transition-all duration-200',
+              'rounded-full shrink-0 overflow-hidden border border-[var(--color-border)] bg-[var(--color-bg-secondary)] shadow-xs',
+              isHero ? 'h-10 w-10 mt-0.5' : 'hidden sm:block h-9 w-9',
               isLoading && 'animate-pulse'
             )}
             aria-hidden="true"
           >
-            {activeChannelAvatar && !isLoading ? (
+            {activeChannelAvatar && !avatarError && !isLoading ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={activeChannelAvatar}
@@ -142,22 +179,25 @@ export function VideoCard({
                 className="h-full w-full object-cover"
                 loading="lazy"
                 decoding="async"
+                onError={() => setAvatarError(true)}
               />
             ) : (
-              <div className="h-full w-full bg-red-500/20 flex items-center justify-center text-xs font-bold text-red-500">
-                {activeChannelName ? activeChannelName.charAt(0).toUpperCase() : ''}
+              <div className="h-full w-full bg-red-500/15 flex items-center justify-center text-xs font-bold text-red-600 dark:text-red-400">
+                {activeChannelName ? activeChannelName.charAt(0).toUpperCase() : 'J'}
               </div>
             )}
           </div>
         )}
 
         <div className="flex-1 min-w-0 space-y-1">
-          {/* Title */}
+          {/* Title — generous line-height for Gujarati & mixed script */}
           <div
             className={cn(
-              'font-semibold text-[var(--color-text-primary)] leading-snug line-clamp-2',
-              layout === 'row' ? 'text-[12.5px] sm:text-[13px] leading-[1.35]' : 'text-fluid-sm',
-              'group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors duration-200',
+              'font-semibold text-[var(--color-text-primary)] text-gujarati',
+              'group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors duration-200',
+              isHero && 'font-display font-bold text-[16px] sm:text-lg leading-[1.42] line-clamp-3',
+              isGrid && 'text-[13px] sm:text-fluid-sm leading-[1.42] line-clamp-2',
+              isRow && 'text-[12.5px] sm:text-[13px] leading-[1.38] line-clamp-2',
               isLoading && 'animate-pulse rounded-lg h-4 bg-[var(--color-bg-secondary)] w-full'
             )}
           >
@@ -165,21 +205,47 @@ export function VideoCard({
           </div>
           {isLoading && <div className="animate-pulse rounded-lg h-3 bg-[var(--color-bg-secondary)] w-3/4 mt-1" />}
 
-          {/* YouTube-style Channel & Views Meta */}
+          {/* Channel & Views Meta */}
           {!isLoading ? (
-            <div className="text-[11px] text-[var(--color-text-secondary)] line-clamp-1 flex flex-wrap items-center gap-1 font-medium">
+            <div className="text-[11px] text-[var(--color-text-secondary)] flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-medium min-w-0">
+              {/* Compact inline avatar on mobile 2-col grid */}
+              {isGrid && (
+                <span className="sm:hidden inline-flex h-4 w-4 rounded-full overflow-hidden border border-[var(--color-border)] bg-[var(--color-bg-secondary)] shrink-0">
+                  {activeChannelAvatar && !avatarError ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={activeChannelAvatar}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => setAvatarError(true)}
+                    />
+                  ) : (
+                    <span className="h-full w-full flex items-center justify-center text-[8px] font-bold text-red-600 dark:text-red-400">
+                      {activeChannelName ? activeChannelName.charAt(0).toUpperCase() : 'J'}
+                    </span>
+                  )}
+                </span>
+              )}
               <span className="truncate max-w-[130px] sm:max-w-[170px]">{activeChannelName}</span>
               {formattedViews && (
                 <>
-                  <span className="opacity-40">·</span>
-                  <span>{formattedViews}</span>
+                  <span className="opacity-40" aria-hidden="true">·</span>
+                  <span className="shrink-0">{formattedViews}</span>
                 </>
               )}
-              {activeDate && (
+              {activeDate && !isGrid && (
                 <>
-                  <span className="opacity-40">·</span>
-                  <span>{activeDate}</span>
+                  <span className="opacity-40" aria-hidden="true">·</span>
+                  <span className="shrink-0">{activeDate}</span>
                 </>
+              )}
+              {activeDate && isGrid && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 shrink-0">
+                  <span className="opacity-40" aria-hidden="true">·</span>
+                  <span>{activeDate}</span>
+                </span>
               )}
             </div>
           ) : (
@@ -205,7 +271,7 @@ export function VideoCard({
 }
 
 // Skeleton array helper
-export function VideoCardSkeleton({ count = 8, layout = 'grid' }: { count?: number; layout?: 'grid' | 'row' }) {
+export function VideoCardSkeleton({ count = 8, layout = 'grid' }: { count?: number; layout?: 'grid' | 'row' | 'hero' }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
