@@ -451,6 +451,19 @@ export default function ProfilePage() {
 
         {/* Menu list */}
         <div className="space-y-4">
+          {/* ── Parent "Your Account" section (Your Progress) ────────── */}
+          {role === 'parent' && (
+            <ProfileSection title="Your Account">
+              <ProfileItem
+                icon={BarChart2}
+                iconBg="bg-emerald-500/10 text-emerald-500"
+                label="Your Progress"
+                subtitle="See what you've learned & watched"
+                onClick={() => setShowMyProgress(true)}
+              />
+            </ProfileSection>
+          )}
+
           {/* ── Parent Admin Controls ──────────────────────────────────── */}
           {role === 'parent' && (
             <ProfileSection title="Admin Controls">
@@ -1033,11 +1046,11 @@ export default function ProfilePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            MODAL: CHILD'S OWN "YOUR PROGRESS" VIEW
+            MODAL: "YOUR PROGRESS" VIEW (child or parent's own progress)
             Uses the SAME ChildProgressView component, scoped to the logged-in
-            child's own data — no parent-only actions.
+            user's own data.
             ══════════════════════════════════════════════════════════════════ */}
-        {showMyProgress && session && role === 'child' && (
+        {showMyProgress && session && (role === 'child' || role === 'parent') && (
           <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
             <div
               className={cn(
@@ -1057,7 +1070,9 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-neutral-900 dark:text-white text-fluid-base leading-tight">Your Progress</p>
-                  <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 font-mono truncate">@{resolvedChildUsername || '…'}</p>
+                  <p className="text-[11.5px] text-neutral-500 dark:text-neutral-400 font-mono truncate">
+                    {role === 'child' ? `@${resolvedChildUsername || '…'}` : (user?.email || 'Parent · Administrator')}
+                  </p>
                 </div>
                 <button
                   type="button"

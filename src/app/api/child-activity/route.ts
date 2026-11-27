@@ -36,6 +36,16 @@ export async function POST(request: Request) {
     if (!serviceKey) return Response.json({code:'ACTIVITY_ROUTE_MISSING'}, {status:503});
     const { childActivity } = await import('../../../../supabase/functions/_shared/childActivity');
     const admin = createClient(url,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
+    if (body.kind === 'day' && uuid.test(body.child_id) && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+      const { data: { user } } = await admin.auth.getUser(authorization.slice(7));
+      const isChild = user?.app_metadata?.role === 'child' || user?.user_metadata?.role === 'child';
+      if (user && !isChild && user.id === body.child_id) {
+        if (body.timezone !== undefined && body.timezone !== 'Asia/Kolkata') {
+          return Response.json({code:'INVALID_ACTIVITY'}, {status:400});
+        }
+        return await loadParentSelfDay(admin, user.id, body.date);
+      }
+    }
     return await childActivity(admin,authorization.slice(7),body,received);
   } catch {
     return Response.json({code:'ACTIVITY_SERVICE_UNAVAILABLE'},{status:503});
@@ -104,4 +114,82 @@ async function completeLegacyDay(day: ActivityDay, child: string, date: string, 
     occurrence.card = video ? makeCard(video,row?.progress_percent ?? null,row?.absolute_position ?? 0) : null;
     occurrence.title = null;
   }
+}
+
+async function loadParentSelfDay(
+  admin: ReturnType<typeof createClient<any>>,
+  parentId: string,
+  date: string
+) {
+  const from = new Date(date + 'T00:00:00+05:30');
+  const until = new Date(from.getTime() + 86400000);
+  const fields = 'id,youtube_video_id,title,thumbnail_url,channels!inner(title)';
+
+  const { data: daily } = await admin
+    .from('child_watch_daily')
+    .select('seconds_watched')
+    .eq('child_id', parentId)
+    .eq('watch_date', date)
+    .maybeSingle();
+
+  const playback = Number(daily?.seconds_watched ?? 0);
+  const history: NonNullable<ActivityDay['history']> = [];
+
+  for (let offset = 0; ; offset += 200) {
+    const { data, error } = await admin
+      .from('watch_sessions')
+      .select(`id,last_watched_at,progress_percent,absolute_position,videos(${fields})`)
+      .eq('child_id', parentId)
+      .gte('last_watched_at', from.toISOString())
+      .lt('last_watched_at', until.toISOString())
+      .order('last_watched_at')
+      .order('id')
+      .range(offset, offset + 199);
+
+    if (error) {
+      return Response.json({ code: 'WATCH_LOOKUP_FAILED' }, { status: 503 });
+    }
+
+    for (const row of (data ?? []) as unknown as {
+      id: string;
+      last_watched_at: string;
+      videos: Video | null;
+      progress_percent: number;
+      absolute_position: number;
+    }[]) {
+      const v = row.videos;
+      history.push({
+        id: row.id,
+        at: row.last_watched_at,
+        title: null,
+        card: v
+          ? {
+              target: v.youtube_video_id || v.id,
+              title: v.title,
+              thumbnail:
+                v.thumbnail_url ||
+                (youtube.test(v.youtube_video_id)
+                  ? `https://i.ytimg.com/vi/${v.youtube_video_id}/hqdefault.jpg`
+                  : ''),
+              channel: v.channels.title,
+              percent: row.progress_percent,
+              resume: row.absolute_position,
+            }
+          : null,
+      });
+    }
+
+    if ((data?.length ?? 0) < 200) break;
+  }
+
+  const day: ActivityDay = {
+    coverage: 'full',
+    has_watch_history: history.length > 0 || playback > 0,
+    history,
+    visits: [],
+    website: 0,
+    playback,
+  };
+
+  return Response.json(day);
 }

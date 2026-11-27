@@ -86,8 +86,8 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
       }
     }
 
-    // If no URL resume param, fetch saved position for child viewers
-    if (role === 'child' && user?.id && video?.id) {
+    // If no URL resume param, fetch saved position for signed-in viewers
+    if ((role === 'child' || role === 'parent') && user?.id && video?.id) {
       const fetchResume = async () => {
         try {
           const supabase = createClient();
@@ -198,7 +198,7 @@ function VideoPlaybackContent({ videoId }: { videoId: string }) {
                     videoId={activeYtId}
                     title={video?.title}
                     autoplay={true}
-                    childId={role === 'child' ? user?.id : undefined}
+                    childId={(role === 'child' || role === 'parent') ? user?.id : undefined}
                     videoDbId={video?.id}
                     channelId={video?.channel_id || channel?.id}
                     accessToken={session?.access_token}

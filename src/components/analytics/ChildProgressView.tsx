@@ -99,7 +99,7 @@ export function ChildProgressView({ childId, accessToken }: ChildProgressViewPro
       setSummaryLoading(true);
       setSummaryError(null);
       try {
-        const res = await fetch(efUrl('get-child-watch-summary'), {
+        const res = await fetch('/api/watch-summary', {
           method: 'POST',
           headers: authHeaders,
           body: JSON.stringify({ child_id: childId }),
@@ -133,7 +133,7 @@ export function ChildProgressView({ childId, accessToken }: ChildProgressViewPro
     if (allChannels !== null) return; // already loaded
     setAllChannelsLoading(true);
     try {
-      const res = await fetch(efUrl('get-child-watch-channels'), {
+      const res = await fetch('/api/watch-channels', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ child_id: childId }),

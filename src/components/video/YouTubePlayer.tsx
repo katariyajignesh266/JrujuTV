@@ -144,8 +144,7 @@ export function YouTubePlayer({
       beat_timestamp: new Date().toISOString(),
     };
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-    const url = `${supabaseUrl}/functions/v1/record-watch-progress`;
+    const url = '/api/watch-progress';
 
     try {
       fetch(url, {
@@ -153,9 +152,6 @@ export function YouTubePlayer({
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-            ? { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY }
-            : {}),
         },
         body: JSON.stringify(payload),
         keepalive: true,

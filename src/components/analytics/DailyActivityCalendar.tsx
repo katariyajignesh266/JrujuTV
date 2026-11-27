@@ -106,7 +106,7 @@ function Calendar({childId,accessToken}:{childId:string;accessToken:string}) {
       !data ? <p role="status">Loading activity…</p> : <>
         {data.tracking_setup_required && <p className="text-sm">Visit tracking is awaiting database setup.</p>}
         {data.coverage === 'partial' && <p className="text-sm">Visit tracking began during this day.</p>}
-        {!data.visits.length && <p className="text-sm">
+        {!data.visits.length && !(data.coverage === 'full' && data.history?.length) && <p className="text-sm">
           {data.has_watch_history
             ? 'Playback was recorded, but visit details are unavailable for this date.'
             : data.coverage === 'unavailable' ? 'Visit tracking was unavailable on this date.' : 'No visits recorded for this date.'}
@@ -127,9 +127,11 @@ function Calendar({childId,accessToken}:{childId:string;accessToken:string}) {
           <EventLabel kind="start" label="Last watched" at={row.at} date={date} />
           <ActivityVideoCard occurrence={row} />
         </div>)}
-        <dl className="grid grid-cols-2 gap-2 border-t border-border pt-3">
+        <dl className={(!data.visits.length && data.coverage === 'full') ? 'grid grid-cols-1 gap-2 border-t border-border pt-3' : 'grid grid-cols-2 gap-2 border-t border-border pt-3'}>
           {[
-            ['Time on website', !data.visits.length && (data.has_watch_history || data.coverage !== 'full') ? 'Unavailable' : duration(data.website)],
+            ...(!data.visits.length && data.coverage === 'full'
+              ? []
+              : [['Time on website', !data.visits.length && (data.has_watch_history || data.coverage !== 'full') ? 'Unavailable' : duration(data.website)]]),
             ['Playback time', duration(data.playback)]
           ].map(([label,value]) => <div key={label} className="rounded-xl bg-surface-secondary p-2.5">
             <dt className="text-xs text-content-secondary">{label}</dt>
