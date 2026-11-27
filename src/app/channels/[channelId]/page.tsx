@@ -118,42 +118,72 @@ export default function ChannelDetailPage({
   const syncedCount = channel?.synced_video_count ?? 0;
   const totalCount = channel?.total_video_count ?? channel?.video_count ?? 0;
   const isImporting = syncStatus === 'pending' || syncStatus === 'in_progress';
+  const importPercent = totalCount > 0 ? Math.min(100, Math.round((syncedCount / totalCount) * 100)) : 0;
   const isGenuineEnd = !hasMore && !loading && videos.length > 0 && syncStatus === 'complete';
   const isImportingEnd = !hasMore && !loading && videos.length > 0 && isImporting;
 
   return (
     <PageShell>
-      <div className="max-w-7xl mx-auto space-y-6 pb-16">
-        {/* Navigation */}
-        <div className="flex items-center gap-2">
+      <div className="max-w-7xl mx-auto space-y-5 pb-16">
+        {/* Top Navigation + Parent Sync Action */}
+        <div className="flex items-center justify-between gap-3">
           <Link
             href="/channels"
             className={cn(
-              'inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl text-sm font-semibold',
-              'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white',
-              'bg-white dark:bg-white/[0.05] border border-neutral-200 dark:border-white/[0.08]',
-              'hover:border-neutral-300 dark:hover:border-red-400/30 hover:bg-neutral-50 dark:hover:bg-white/[0.08]',
+              'inline-flex items-center gap-2 min-h-[40px] px-3.5 py-2 rounded-full text-sm font-semibold',
+              'text-[var(--color-text-primary)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)]',
+              'hover:border-[#903d30]/50 dark:hover:border-[#f2b59a]/50',
               'active:scale-95 transition-all duration-150 shadow-xs'
             )}
           >
             <ArrowLeft size={16} />
             <span>All Channels</span>
           </Link>
+
+          {channel && role === 'parent' && (
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className={cn(
+                'inline-flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-full text-xs sm:text-sm font-semibold',
+                'bg-[#74382f] text-[#fff7ef] dark:bg-[#f1c1a6] dark:text-[#342129]',
+                'hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 shadow-xs'
+              )}
+            >
+              <RefreshCw
+                size={14}
+                className={cn(isSyncing && 'animate-spin')}
+              />
+              <span>
+                {isSyncing
+                  ? 'Syncing…'
+                  : isImporting
+                  ? 'Continue Import'
+                  : 'Sync Videos'}
+              </span>
+            </button>
+          )}
         </div>
 
-        {/* Channel Banner / Header Card */}
+        {/* Premium Editorial Channel Header Card */}
         {channel ? (
-          <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#1a1a2e]/80 backdrop-blur-xl border border-neutral-200 dark:border-white/[0.07] shadow-lg p-6 sm:p-7">
-            {/* Decorative corner glow */}
-            <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-red-500/10 dark:bg-red-500/15 blur-3xl pointer-events-none" />
-            {/* Top accent line */}
-            <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-red-500 via-rose-400 to-red-600 rounded-t-3xl" />
+          <div className="relative overflow-hidden rounded-3xl bg-[var(--color-bg-elevated)] border border-[var(--color-border)] shadow-md p-5 sm:p-7">
+            {/* Subtle editorial gradient wash */}
+            <div
+              className="absolute inset-0 pointer-events-none opacity-60 dark:opacity-40"
+              style={{
+                background:
+                  'radial-gradient(ellipse at top right, rgba(229,57,53,0.09), transparent 55%), radial-gradient(ellipse at bottom left, rgba(255,143,0,0.06), transparent 55%)',
+              }}
+            />
+            {/* Top accent bar */}
+            <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#903d30] via-[#E53935] to-[#FF8F00]" />
 
-            <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-5">
-              {/* Avatar with glow ring */}
+            <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 min-w-0">
+              {/* Channel Avatar */}
               <div className="relative shrink-0">
-                <div className="absolute -inset-2 rounded-full bg-gradient-to-br from-red-500/20 to-rose-500/20 blur-md opacity-60" />
-                <div className="relative h-24 w-24 rounded-full overflow-hidden bg-neutral-100 dark:bg-white/[0.05] border-2 border-red-400/40 shadow-xl">
+                <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 border-[#903d30]/30 dark:border-[#f2b59a]/30 shadow-md">
                   {channel.thumbnail_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -164,110 +194,87 @@ export default function ChannelDetailPage({
                       decoding="async"
                     />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center font-bold text-3xl text-red-500 bg-gradient-to-br from-red-500/10 to-rose-500/10">
+                    <div className="h-full w-full flex items-center justify-center font-bold text-2xl sm:text-3xl text-[#903d30] dark:text-[#f2b59a] bg-red-500/10">
                       {channel.title.charAt(0)}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="flex-1 text-center sm:text-left min-w-0 space-y-2">
-                <h1 className="font-extrabold text-2xl sm:text-3xl text-neutral-900 dark:text-white tracking-tight truncate">
+              {/* Channel Copy — full width + clean wrapping so long names never clip */}
+              <div className="w-full flex-1 min-w-0 text-center sm:text-left space-y-2">
+                <h1 className="font-display font-bold text-xl sm:text-3xl text-[var(--color-text-primary)] tracking-tight leading-snug break-words line-clamp-2">
                   {channel.title}
                 </h1>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">
+
+                <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] font-medium">
                   {channel.subscriber_count > 0 &&
                     `${formatCompactNumber(channel.subscriber_count)} subscribers`}
                   {channel.subscriber_count > 0 && channel.video_count > 0 && ' · '}
                   {channel.video_count > 0 &&
                     `${formatCompactNumber(channel.video_count)} videos`}
                 </p>
-                <div className="pt-0.5 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
-                    Safe Curated Content
+
+                <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-500/10 text-[#903d30] dark:text-[#f2b59a] border border-red-500/20">
+                    Safe Curated
                   </span>
-                  <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-white/[0.08]">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
                     5+ Min Long Form
                   </span>
                   {isImporting && (
-                    <span className="flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <Loader2 size={10} className="animate-spin" />
-                      Importing {syncedCount > 0 && totalCount > 0
-                        ? `${syncedCount.toLocaleString()} / ${totalCount.toLocaleString()}`
-                        : 'videos'}…
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <Loader2 size={10} className="animate-spin shrink-0" />
+                      <span>
+                        Importing {syncedCount > 0 ? syncedCount.toLocaleString() : ''} videos…
+                      </span>
                     </span>
                   )}
                   {syncStatus === 'complete' && (
-                    <span className="flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      <CheckCircle2 size={10} />
-                      Fully synced
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <CheckCircle2 size={10} className="shrink-0" />
+                      <span>Synced</span>
                     </span>
                   )}
                 </div>
               </div>
-
-              {/* Parent sync button */}
-              {role === 'parent' && (
-                <div className="shrink-0 mt-2 sm:mt-0">
-                  <button
-                    type="button"
-                    onClick={handleManualSync}
-                    disabled={isSyncing}
-                    className={cn(
-                      'inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold',
-                      'bg-neutral-100 dark:bg-white/[0.06] border border-neutral-200 dark:border-white/[0.08]',
-                      'text-neutral-700 dark:text-neutral-200',
-                      'hover:border-red-400/40 dark:hover:border-red-400/30 hover:bg-red-500/5 dark:hover:bg-red-500/10',
-                      'active:scale-95 transition-all disabled:opacity-50 shadow-xs'
-                    )}
-                  >
-                    <RefreshCw
-                      size={15}
-                      className={cn(isSyncing && 'animate-spin text-red-500 dark:text-red-400')}
-                    />
-                    <span>
-                      {isSyncing
-                        ? 'Syncing…'
-                        : isImporting
-                        ? 'Continue Import'
-                        : 'Sync Videos'}
-                    </span>
-                  </button>
-                </div>
-              )}
             </div>
 
-            {/* Import progress bar */}
+            {/* Import progress bar (clamped to 0..100%) */}
             {isImporting && syncedCount > 0 && totalCount > 0 && (
-              <div className="mt-5 space-y-2">
-                <div className="flex justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
-                  <span>Import progress</span>
-                  <span className="font-semibold text-neutral-700 dark:text-neutral-200">{Math.round((syncedCount / totalCount) * 100)}%</span>
+              <div className="mt-5 pt-4 border-t border-[var(--color-border)]/70 space-y-1.5">
+                <div className="flex justify-between text-[11px] text-[var(--color-text-secondary)]">
+                  <span>Import progress ({syncedCount.toLocaleString()} synced)</span>
+                  <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                    {importPercent}%
+                  </span>
                 </div>
-                <div className="h-2 bg-neutral-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
+                <div className="h-1.5 bg-[var(--color-bg-secondary)] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-700 shadow-sm"
-                    style={{ width: `${Math.min(100, Math.round((syncedCount / totalCount) * 100))}%` }}
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-700"
+                    style={{ width: `${importPercent}%` }}
                   />
                 </div>
               </div>
             )}
           </div>
         ) : loading ? (
-          <div className="h-36 rounded-3xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/[0.06] animate-pulse" />
+          <div className="h-40 rounded-3xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)] animate-pulse" />
         ) : null}
 
         {/* Video List Section — Virtualized with look-ahead pagination */}
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h2 className="font-bold text-xl text-neutral-900 dark:text-white tracking-tight">
-              Uploaded Videos
-            </h2>
-            {videos.length > 0 && (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
-                {videos.length.toLocaleString()}{hasMore ? '+' : ''}
-              </span>
-            )}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <h2 className="font-display font-bold text-lg sm:text-xl text-[var(--color-text-primary)] tracking-tight">
+                Uploaded Videos
+              </h2>
+              {videos.length > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-[#903d30] dark:text-[#f2b59a] border border-red-500/20 tabular-nums">
+                  {videos.length.toLocaleString()}{hasMore ? '+' : ''}
+                </span>
+              )}
+            </div>
           </div>
 
           {loading ? (
