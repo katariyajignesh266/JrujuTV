@@ -1,182 +1,114 @@
-// src/features/shorts/components/ShortsItem.tsx
 'use client';
 
-import React, { useRef, useEffect, memo } from 'react';
-import { Loader2, VolumeX, AlertCircle, RefreshCw } from 'lucide-react';
-import { cn } from '@/lib/cn';
-import { ShortVideo } from '../types';
+import { memo, useEffect, useRef } from 'react';
+import { CircleAlert, LoaderCircle, Pause, Play, Radio, RotateCcw } from 'lucide-react';
+import { formatDuration } from '@/lib/formatters';
 import { useShortsFeatureStore } from '../store/shortsStore';
+import type { ShortVideo } from '../types';
 import { ShortsProgressBar } from './ShortsProgressBar';
 import { ShortsVideoPlayer } from './ShortsVideoPlayer';
+import styles from './Shorts.module.css';
 
 interface ShortsItemProps {
   video: ShortVideo;
   index: number;
   isActive: boolean;
-  isPlaying: boolean;
   isMounted: boolean;
+  isV2: boolean;
+  hasFrame: boolean;
+  isPlaying: boolean;
   progressPercent: number;
-  isV2?: boolean;
-  isV2Ready?: boolean;
-  isV2Playing?: boolean;
-  isV2FirstFrame?: boolean;
-  errorMessage?: string | null;
+  errorMessage: string | null;
   onAttachContainer: (index: number, el: HTMLDivElement | null) => void;
-  onAttachV2Container?: (index: number, el: HTMLDivElement | null) => void;
+  onAttachV2Container: (index: number, el: HTMLDivElement | null) => void;
   onGestureTap: () => void;
-  onRetry?: () => void;
+  onTogglePlayback: () => void;
+  onRetry: () => void;
 }
 
 export const ShortsItem = memo(function ShortsItem({
-  video,
-  index,
-  isActive,
-  isPlaying,
-  isMounted,
-  progressPercent,
-  isV2 = false,
-  isV2Ready = false,
-  isV2Playing = false,
-  isV2FirstFrame = false,
-  errorMessage = null,
-  onAttachContainer,
-  onAttachV2Container,
-  onGestureTap,
-  onRetry,
+  video, index, isActive, isMounted, isV2, hasFrame, isPlaying, progressPercent,
+  errorMessage, onAttachContainer, onAttachV2Container, onGestureTap, onTogglePlayback, onRetry,
 }: ShortsItemProps) {
-  const iframeContainerRef = useRef<HTMLDivElement | null>(null);
-  const { hasUserGestureUnlocked } = useShortsFeatureStore();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const unlocked = useShortsFeatureStore((state) => state.hasUserGestureUnlocked);
+  const poster = video.poster_url || video.thumbnail_url;
+  const channel = video.channel?.title || video.channelName;
+  const avatar = video.channel?.thumbnail_url || video.channelAvatarUrl;
+  const title = video.title || 'Untitled short';
+  const duration = video.duration_seconds;
+  const progress = Number.isFinite(progressPercent) ? Math.max(0, Math.min(100, progressPercent)) : 0;
+  const playbackLabel = isPlaying ? 'Pause short' : 'Play short';
 
-  // If V1 iframe mode, manage iframe container attachment
   useEffect(() => {
-    if (!isV2) {
-      if (isMounted) {
-        onAttachContainer(index, iframeContainerRef.current);
-      } else {
-        onAttachContainer(index, null);
-      }
-      return () => {
-        onAttachContainer(index, null);
-      };
-    }
+    if (isV2 || !isMounted) return;
+    onAttachContainer(index, frameRef.current);
+    return () => onAttachContainer(index, null);
   }, [index, isV2, isMounted, onAttachContainer]);
 
-  // Determine effective playing & poster visibility state:
-  // For V2: remove poster ONLY when the first frame is painted on screen to prevent black flashes!
-  // For V1: remove poster when player starts playing.
-  const effectivePlaying = isV2 ? isV2FirstFrame : isPlaying;
-  const posterUrl = video.poster_url || video.thumbnail_url;
-  const isBuffering = isActive && !effectivePlaying && !errorMessage;
-
   return (
-    <div className="relative w-full h-full shrink-0 bg-black flex flex-col justify-between overflow-hidden select-none">
-      {/* 1. Ambient Blurred Backdrop */}
-      {posterUrl && (
-        <div
-          className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-25 pointer-events-none"
-          style={{ backgroundImage: `url(${posterUrl})` }}
-        />
-      )}
-
-      {/* 2. Video Player Layer (Mounted only within the active lookahead window) */}
-      {isV2 && onAttachV2Container ? (
-        /* V2 Native HTML5 Video Player */
-        isMounted ? (
-          <ShortsVideoPlayer
-            index={index}
-            isActive={isActive}
-            onAttachContainer={onAttachV2Container}
-          />
-        ) : null
-      ) : (
-        /* V1 Scaled YouTube IFrame Player */
-        <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none overflow-hidden">
-          {isMounted && (
-            <div
-              ref={iframeContainerRef}
-              className="shorts-player-frame pointer-events-none select-none"
-            />
+    <article className={styles.item} aria-label={title} inert={!isActive}>
+      <div className={styles.picture}>
+        {isMounted && poster && (
+          <div className={styles.ambient} aria-hidden="true" style={{ backgroundImage: `url(${JSON.stringify(poster)})` }} />
+        )}
+        <div className={styles.aperture}>
+          {isMounted && (isV2 ? (
+            <ShortsVideoPlayer index={index} isActive={isActive} onAttachContainer={onAttachV2Container} />
+          ) : (
+            <div ref={frameRef} className="shorts-player-frame" />
+          ))}
+          {isMounted && poster && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className={styles.poster} data-visible={!hasFrame} src={poster} alt="" />
           )}
         </div>
-      )}
-
-      {/* 3. Poster Layer (Seamless crossfade when video frame is ready — zero black flash) */}
-      {posterUrl && (
-        <div
-          className={cn(
-            'absolute inset-0 z-10 transition-opacity duration-300 pointer-events-none flex items-center justify-center bg-black',
-            effectivePlaying ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          )}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={posterUrl}
-            alt={video.title || 'Shorts'}
-            className="w-full h-full object-cover pointer-events-none"
-          />
-
-          {/* Buffering indicator: shown while active video is loading / preparing first frame */}
-          {isBuffering && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-              <div className="flex flex-col items-center gap-2 text-white">
-                <Loader2 className="w-10 h-10 text-brand-primary animate-spin" />
-              </div>
-            </div>
-          )}
-
-          {/* Controlled Error State (Non-endless spinner recovery) */}
-          {isActive && errorMessage && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/75 backdrop-blur-sm pointer-events-auto z-20">
-              <div className="flex flex-col items-center text-center px-6 py-4 max-w-xs bg-neutral-900/90 border border-neutral-700 rounded-2xl shadow-2xl text-white space-y-3">
-                <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">Unable to play video</p>
-                  <p className="text-xs text-neutral-400 line-clamp-2">{errorMessage}</p>
-                </div>
-                {onRetry && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRetry();
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-semibold rounded-full shadow-lg transition-transform active:scale-95 cursor-pointer"
-                  >
-                    <RefreshCw size={14} />
-                    <span>Try Again</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 4. Full-Bleed Gesture Layer: captures taps to unmute/toggle playback, allows vertical scrolling */}
-      <div
-        onClick={onGestureTap}
-        className="absolute inset-0 z-20 cursor-pointer pointer-events-auto"
-        aria-label="Tap to unmute or toggle playback"
-      />
-
-      {/* 5. Pure Design: Small "⚡ Shorts" Badge Top-Left */}
-      <div className="absolute top-[calc(env(safe-area-inset-top,0px)+12px)] left-4 z-30 pointer-events-none flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white shadow-lg">
-        <span className="text-red-500 font-bold text-xs">⚡</span>
-        <span className="text-xs font-semibold tracking-wide">Shorts</span>
-      </div>
-
-      {/* 6. Sound Status Indicator: shown until first user tap unlocks session sound */}
-      {isActive && !hasUserGestureUnlocked && !errorMessage && (
-        <div className="absolute top-[calc(env(safe-area-inset-top,0px)+12px)] right-4 z-30 pointer-events-none animate-pulse">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium shadow-md">
-            <VolumeX size={13} className="text-red-400" />
-            <span>Tap for sound</span>
+        {isActive && (errorMessage ? (
+          <div className={styles.playerError} role="status">
+            <CircleAlert size={26} aria-hidden="true" />
+            <strong>This short couldn’t play</strong>
+            <p>{errorMessage}</p>
+            <button type="button" className={styles.secondaryButton} onClick={onRetry}>
+              <RotateCcw size={15} aria-hidden="true" />Try again
+            </button>
           </div>
+        ) : (
+          <>
+            <button type="button" className={styles.gesture} onClick={onGestureTap}
+              aria-label={unlocked ? playbackLabel : 'Play with sound'} tabIndex={-1} />
+            {!hasFrame && <span className={styles.buffering} role="status">
+              <LoaderCircle size={22} aria-hidden="true" /><span className="sr-only">Loading video</span>
+            </span>}
+          </>
+        ))}
+      </div>
+      <footer className={styles.caption}>
+        <div className={styles.captionRow}>
+          <div className={styles.captionText}>
+            {channel && <div className={styles.channel}>
+              <span className={styles.avatar}>
+                <Radio size={13} aria-hidden="true" />
+                {avatar && isMounted && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatar} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />
+                )}
+              </span>
+              <span dir="auto">{channel}</span>
+            </div>}
+            <h2 dir="auto" title={title}>{title}</h2>
+          </div>
+          <button type="button" aria-label={playbackLabel} title={playbackLabel}
+            className={styles.playButton} disabled={!!errorMessage} onClick={onTogglePlayback}>
+            {isPlaying ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
+          </button>
         </div>
-      )}
-
-      {/* 7. Bottom Hairline Progress Bar */}
-      <ShortsProgressBar progressPercent={progressPercent} />
-    </div>
+        <div className={styles.timeline}>
+          <ShortsProgressBar progressPercent={progress} />
+          {duration > 0 && <span className={styles.time}>
+            {formatDuration(duration * progress / 100)} <span>/</span> {formatDuration(duration)}
+          </span>}
+        </div>
+      </footer>
+    </article>
   );
 });

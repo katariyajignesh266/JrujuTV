@@ -2,11 +2,9 @@
 'use client';
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { LoaderCircle } from 'lucide-react';
 import { selectActivityVideo } from '@/lib/activity/childActivity';
 import { useAuthStore } from '@/store/authStore';
-import { useUIStore } from '@/store/uiStore';
 import { useShortsFeatureStore } from '../store/shortsStore';
 import { useShortsFeedQuery } from '../hooks/useShortsFeedQuery';
 import { useShortsPlayerPool } from '../hooks/useShortsPlayerPool';
@@ -15,10 +13,12 @@ import { ShortsItem } from './ShortsItem';
 import { ShortsEmptyState } from './ShortsEmptyState';
 import { ShortsDebugOverlay } from './ShortsDebugOverlay';
 import { ShortVideo } from '../types';
+import { ShortsLoading, ShortsStage } from './ShortsStage';
+import { ShortsQueue } from './ShortsQueue';
+import styles from './Shorts.module.css';
 
 export function ShortsContainer() {
   const { initialized } = useAuthStore();
-  const { sidebarOpen } = useUIStore();
   const { activeIndex, setActiveIndex, markVideoUnplayable } = useShortsFeatureStore();
 
   const isV2FeatureFlag = process.env.NEXT_PUBLIC_SHORTS_V2 === 'true';
@@ -35,9 +35,11 @@ export function ShortsContainer() {
   const {
     videos,
     loading,
+    loadFailed,
     loadingMore,
     loadMore,
     replayShorts,
+    refetch,
   } = useShortsFeedQuery(initialized);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -50,7 +52,9 @@ export function ShortsContainer() {
       const container = scrollContainerRef.current;
       if (!container || index < 0 || index >= videos.length) return;
       const targetTop = index * container.clientHeight;
-      container.scrollTo({ top: targetTop, behavior: 'smooth' });
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const distant = Math.abs(container.scrollTop - targetTop) > container.clientHeight * 1.5;
+      container.scrollTo({ top: targetTop, behavior: reduceMotion || distant ? 'instant' : 'smooth' });
     },
     [videos.length]
   );
@@ -106,6 +110,8 @@ export function ShortsContainer() {
     playingIndices: v1PlayingIndices,
     errorMap: v1ErrorMap,
     progressMap: v1ProgressMap,
+    statusMap: v1StatusMap,
+    togglePlayback: toggleV1Playback,
     handleUserGesturePlayback: handleV1Gesture,
     retryV1Player,
     getDiagnosticLogs,
@@ -115,11 +121,11 @@ export function ShortsContainer() {
   const {
     attachV2Container,
     pauseAllV2Videos,
-    readyMap: v2ReadyMap,
-    playingMap: v2PlayingMap,
     firstFrameMap: v2FirstFrameMap,
     errorMap: v2ErrorMap,
     progressMap: v2ProgressMap,
+    statusMap: v2StatusMap,
+    togglePlayback: toggleV2Playback,
     handleUserGesturePlayback: handleV2Gesture,
     retryVideo: retryV2Video,
     debugInfo: v2DebugInfo,
@@ -233,6 +239,9 @@ export function ShortsContainer() {
   // 4. Desktop keyboard navigation (Arrow Up / Arrow Down)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey ||
+          (target instanceof HTMLElement && target !== document.body && !target.closest('#main-content'))) return;
       if (e.key === 'ArrowDown' || e.key === 'PageDown') {
         e.preventDefault();
         handleNext();
@@ -276,21 +285,7 @@ export function ShortsContainer() {
   }, [handleNext, handlePrev]);
 
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      role="feed"
-      aria-label="Shorts video feed"
-      className={cn(
-        'relative w-full overflow-hidden select-none',
-        'md:ml-[72px]',
-        sidebarOpen && 'xl:ml-60',
-        'transition-all duration-300',
-        // Mobile height fills between mobile top safe area and bottom nav (58px + safe area)
-        'h-[calc(100dvh-58px-env(safe-area-inset-bottom,0px))] md:h-[calc(100dvh-56px)]'
-      )}
-    >
-      {/* Real-Time Performance & Pool Debug Overlay (when ?debug=1) */}
+    <ShortsStage showSound={!loading && !loadFailed && videos.length > 0}>
       {isDebugMode && (
         <ShortsDebugOverlay
           debugInfo={v2DebugInfo}
@@ -305,144 +300,45 @@ export function ShortsContainer() {
           v2ErrorMap={v2ErrorMap}
         />
       )}
-
-      <div className="relative w-full h-full flex items-center justify-center mx-auto overflow-hidden">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center w-full h-full space-y-3 bg-black text-white">
-            <Loader2 className="h-10 w-10 text-brand-primary animate-spin" />
-            <p className="text-sm font-medium text-neutral-400">Loading shorts…</p>
-          </div>
-        ) : videos.length === 0 ? (
-          <div className="flex items-center justify-center w-full h-full px-4 bg-black">
-            <ShortsEmptyState onReplay={replayShorts} />
-          </div>
-        ) : (
-          /* Main 9:16 Centered Shorts Container */
-          <div className="relative w-full max-w-full md:max-w-[420px] h-full flex items-center justify-center md:rounded-3xl md:overflow-hidden md:shadow-2xl md:border md:border-neutral-800 bg-black">
-            {/* Vertical Scroll-Snap Track */}
-            <div
-              ref={scrollContainerRef}
-              id="shorts-track"
-              tabIndex={0}
-              aria-label="Scrollable shorts track"
-              className="shorts-container-track relative w-full h-full overflow-y-auto bg-black select-none scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
-              style={{
-                scrollSnapType: 'y mandatory',
-                overscrollBehaviorY: 'contain',
-                touchAction: 'pan-y',
-              }}
-            >
-              {videos.map((video, index) => {
-                const isCurrentActive = index === activeIndex;
-                // Mount sliding window [activeIndex - 1, activeIndex, activeIndex + 1, activeIndex + 2] for smooth preloading
-                const isNearActive = index >= activeIndex - 1 && index <= activeIndex + 2;
-
-                const isItemV2 = isVideoV2(video, index);
-
-                const isPlaying = isItemV2
-                  ? !!v2PlayingMap[index]
-                  : !!v1PlayingIndices[index];
-
-                const progressPct = isItemV2
-                  ? v2ProgressMap[index] ?? 0
-                  : v1ProgressMap[index] ?? 0;
-
-                const gestureHandler = isItemV2
-                  ? handleV2Gesture
-                  : handleV1Gesture;
-
-                const errorMessage = isItemV2
-                  ? v2ErrorMap[index] ?? null
-                  : v1ErrorMap[index] ?? null;
-
-                const retryHandler = () => {
-                  if (isItemV2) {
-                    retryV2Video(index);
-                  } else {
-                    retryV1Player(index);
-                  }
-                };
-
-                return (
-                  <div
-                    key={`${video.id || video.youtube_video_id}-${index}`}
-                    data-index={index}
-                    ref={(el) => {
-                      itemRefs.current[index] = el;
-                    }}
-                    className="shorts-snap-card relative w-full shrink-0 bg-black"
-                    style={{
-                      height: '100%',
-                      scrollSnapAlign: 'start',
-                      scrollSnapStop: 'always',
-                    }}
-                  >
-                    <ShortsItem
-                      video={video}
-                      index={index}
-                      isActive={isCurrentActive}
-                      isPlaying={isPlaying}
-                      isMounted={isNearActive}
-                      progressPercent={progressPct}
-                      isV2={isItemV2}
-                      isV2Ready={!!v2ReadyMap[index]}
-                      isV2Playing={!!v2PlayingMap[index]}
-                      isV2FirstFrame={!!v2FirstFrameMap[index]}
-                      errorMessage={errorMessage}
-                      onAttachContainer={attachV1Player}
-                      onAttachV2Container={attachV2Container}
-                      onGestureTap={gestureHandler}
-                      onRetry={retryHandler}
-                    />
-                  </div>
-                );
-              })}
-
-              {/* Infinite Prefetch Sentinel */}
-              <div
-                ref={sentinelRef}
-                className="w-full h-8 shrink-0 flex items-center justify-center bg-black"
-              >
-                {loadingMore && (
-                  <Loader2 className="w-5 h-5 text-neutral-500 animate-spin" />
-                )}
-              </div>
-            </div>
-
-            {/* Desktop Navigation Floating Controls */}
-            <div className="hidden md:flex flex-col gap-3 absolute -right-16 top-1/2 -translate-y-1/2 z-30">
-              <button
-                type="button"
-                onClick={handlePrev}
-                disabled={activeIndex === 0}
-                className={cn(
-                  'h-12 w-12 rounded-full bg-surface-secondary border border-border flex items-center justify-center',
-                  'text-content-primary shadow-lg hover:bg-surface-elevated active:scale-95 transition-all',
-                  'disabled:opacity-30 disabled:cursor-not-allowed'
-                )}
-                title="Previous short (Arrow Up)"
-                aria-label="Previous short"
-              >
-                <ChevronUp size={22} />
-              </button>
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={activeIndex === videos.length - 1}
-                className={cn(
-                  'h-12 w-12 rounded-full bg-surface-secondary border border-border flex items-center justify-center',
-                  'text-content-primary shadow-lg hover:bg-surface-elevated active:scale-95 transition-all',
-                  'disabled:opacity-30 disabled:cursor-not-allowed'
-                )}
-                title="Next short (Arrow Down)"
-                aria-label="Next short"
-              >
-                <ChevronDown size={22} />
-              </button>
+      {loading ? <ShortsLoading /> : loadFailed || !videos.length ? (
+        <ShortsEmptyState loadFailed={loadFailed} onRetry={refetch} onReplay={replayShorts} />
+      ) : (
+        <div className={styles.viewer}>
+          <div ref={scrollContainerRef} id="shorts-track" tabIndex={0} role="feed"
+            aria-label="Shorts video feed" className={`shorts-container-track ${styles.track}`}>
+            {videos.map((video, index) => {
+              const isV2 = isVideoV2(video, index);
+              const status = isV2 ? v2StatusMap[index] : v1StatusMap[index];
+              return (
+                <div key={video.id || video.youtube_video_id} data-index={index}
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  className={`shorts-snap-card ${styles.snap}`}>
+                  <ShortsItem
+                    video={video}
+                    index={index}
+                    isActive={index === activeIndex}
+                    isMounted={index >= activeIndex - 1 && index <= activeIndex + 2}
+                    isV2={isV2}
+                    hasFrame={isV2 ? !!v2FirstFrameMap[index] : !!v1PlayingIndices[index]}
+                    isPlaying={status === 'PLAYING'}
+                    progressPercent={(isV2 ? v2ProgressMap : v1ProgressMap)[index] ?? 0}
+                    errorMessage={(isV2 ? v2ErrorMap : v1ErrorMap)[index] ?? null}
+                    onAttachContainer={attachV1Player}
+                    onAttachV2Container={attachV2Container}
+                    onGestureTap={isV2 ? handleV2Gesture : handleV1Gesture}
+                    onTogglePlayback={isV2 ? toggleV2Playback : toggleV1Playback}
+                    onRetry={() => isV2 ? retryV2Video(index) : retryV1Player(index)}
+                  />
+                </div>
+              );
+            })}
+            <div ref={sentinelRef} className={styles.sentinel}>
+              {loadingMore && <LoaderCircle size={16} aria-label="Loading more shorts" />}
             </div>
           </div>
-        )}
-      </div>
-    </main>
+          <ShortsQueue videos={videos} activeIndex={activeIndex} onSelect={scrollToIndex} />
+        </div>
+      )}
+    </ShortsStage>
   );
 }

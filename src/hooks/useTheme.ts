@@ -3,56 +3,35 @@ import { useEffect, useState, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { useUIStore } from '@/store/uiStore';
 
-/**
- * Ensures mobile browser status bar (<meta name="theme-color">) perfectly
- * mirrors the app state:
- *  1. When video player is in fullscreen: ALWAYS BLACK (#000000), regardless of mode!
- *  2. In normal mode:
- *     - Dark mode:  #0F0F0F
- *     - Light mode: #FFFFFF
- *
- * CRITICAL: Strips any `media` attribute (e.g. `(prefers-color-scheme: light)`)
- * so Android Chrome and Samsung Internet never override the app's chosen theme.
- */
+function getBrowserThemeColor() {
+  const { theme, isPlayerFullscreen } = useUIStore.getState();
+  if (isPlayerFullscreen) return '#000000';
+  return theme === 'dark' || window.location.pathname === '/shorts' ? '#0F0F0F' : '#FFFFFF';
+}
+
+function setBrowserMeta(name: string, content: string) {
+  const metas = document.querySelectorAll<HTMLMetaElement>(`meta[name="${name}"]`);
+  if (!metas.length) {
+    const meta = document.createElement('meta');
+    meta.name = name;
+    meta.content = content;
+    document.head.appendChild(meta);
+    return;
+  }
+
+  metas.forEach((meta) => {
+    if (meta.hasAttribute('media')) meta.removeAttribute('media');
+    if (meta.content !== content) meta.content = content;
+  });
+}
+
 export function syncThemeColorMeta(overrideColor?: string) {
   if (typeof document === 'undefined') return;
 
-  const { theme, isPlayerFullscreen } = useUIStore.getState();
-
-  let color: string;
-  if (overrideColor) {
-    color = overrideColor;
-  } else if (isPlayerFullscreen) {
-    color = '#000000';
-  } else {
-    color = theme === 'dark' ? '#0F0F0F' : '#FFFFFF';
-  }
-
-  const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
-  if (metas.length > 0) {
-    metas.forEach((meta) => {
-      if (meta.hasAttribute('media')) {
-        meta.removeAttribute('media');
-      }
-      meta.setAttribute('content', color);
-    });
-  } else {
-    const meta = document.createElement('meta');
-    meta.name = 'theme-color';
-    meta.content = color;
-    document.head.appendChild(meta);
-  }
-
+  const color = overrideColor || getBrowserThemeColor();
   const isDarkColor = color === '#000000' || color === '#0F0F0F';
-  const appleMeta = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
-  if (appleMeta) {
-    appleMeta.setAttribute('content', isDarkColor ? 'black-translucent' : 'default');
-  } else {
-    const apple = document.createElement('meta');
-    apple.name = 'apple-mobile-web-app-status-bar-style';
-    apple.content = isDarkColor ? 'black-translucent' : 'default';
-    document.head.appendChild(apple);
-  }
+  setBrowserMeta('theme-color', color);
+  setBrowserMeta('apple-mobile-web-app-status-bar-style', isDarkColor ? 'black-translucent' : 'default');
 }
 
 export function useTheme() {
@@ -76,34 +55,15 @@ export function useTheme() {
     syncThemeColorMeta();
   }, [theme, isPlayerFullscreen, pathname]);
 
-  // MutationObserver on <head> to guard against Next.js router injecting light theme-color meta tags
+  // The router can insert its own metadata during client navigation.
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    syncThemeColorMeta();
-
+    const isBrowserMeta = (node: Node) => node instanceof HTMLMetaElement &&
+      (node.name === 'theme-color' || node.name === 'apple-mobile-web-app-status-bar-style');
     const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList') {
-          mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const el = node as HTMLElement;
-              if (el.tagName === 'META' && el.getAttribute('name') === 'theme-color') {
-                syncThemeColorMeta();
-              }
-            }
-          });
-        } else if (mutation.type === 'attributes' && mutation.target) {
-          const el = mutation.target as HTMLElement;
-          if (el.tagName === 'META' && el.getAttribute('name') === 'theme-color') {
-            const { theme: currentTheme, isPlayerFullscreen: isFs } = useUIStore.getState();
-            const expectedColor = isFs ? '#000000' : currentTheme === 'dark' ? '#0F0F0F' : '#FFFFFF';
-            if (el.getAttribute('content') !== expectedColor || el.hasAttribute('media')) {
-              syncThemeColorMeta();
-            }
-          }
-        }
-      }
+      const metadataChanged = mutations.some((mutation) => mutation.type === 'attributes'
+        ? isBrowserMeta(mutation.target)
+        : Array.from(mutation.addedNodes).some(isBrowserMeta) || Array.from(mutation.removedNodes).some(isBrowserMeta));
+      if (metadataChanged) syncThemeColorMeta();
     });
 
     observer.observe(document.head, {

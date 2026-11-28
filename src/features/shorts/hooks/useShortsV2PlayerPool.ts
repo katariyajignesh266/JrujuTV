@@ -119,6 +119,7 @@ export function useShortsV2PlayerPool(
   const videoElementsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
   const elementStatesRef = useRef<Map<number, V2PoolItemState>>(new Map());
   const hostContainersRef = useRef<Map<number, HTMLDivElement>>(new Map());
+  const userPausedElementRef = useRef<HTMLVideoElement | null>(null);
 
   // Pool statistics counters
   const creationCountRef = useRef(0);
@@ -185,6 +186,7 @@ export function useShortsV2PlayerPool(
   const teardownElement = useCallback((index: number) => {
     const el = videoElementsRef.current.get(index);
     if (el) {
+      if (userPausedElementRef.current === el) userPausedElementRef.current = null;
       const video = videosRef.current[index];
       if (video) pauseActivity(video.youtube_video_id || video.id);
       cleanupCountRef.current += 1;
@@ -235,8 +237,8 @@ export function useShortsV2PlayerPool(
 
   // Safely play an element with proper autoplay error handling and audio state
   const safePlayVideo = useCallback((el: HTMLVideoElement, index: number) => {
-    if (index !== activeIndexRef.current) {
-      // Must not play non-active elements
+    if (index !== activeIndexRef.current || !hostContainersRef.current.get(index)?.contains(el)) {
+      // Only a mounted native player can play the active short.
       try {
         el.pause();
         el.muted = true;
@@ -245,6 +247,7 @@ export function useShortsV2PlayerPool(
       }
       return;
     }
+    if (userPausedElementRef.current === el) return;
 
     try {
       if (hasUserGestureUnlockedRef.current && !isMutedRef.current) {
@@ -259,7 +262,15 @@ export function useShortsV2PlayerPool(
         promise.catch((err) => {
           // 1. Autoplay policy blocked unmuted playback -> fall back to muted autoplay
           if (err.name === 'NotAllowedError') {
+            if (
+              index !== activeIndexRef.current ||
+              userPausedElementRef.current === el ||
+              !hostContainersRef.current.get(index)?.contains(el)
+            ) return;
             el.muted = true;
+            if (!useShortsFeatureStore.getState().isMuted) {
+              useShortsFeatureStore.getState().setMuted(true);
+            }
             el.play().catch(() => {});
           } else if (err.name === 'AbortError') {
             // 2. AbortError: play() was interrupted by scroll/pause -> ignore normal transition
@@ -386,10 +397,12 @@ export function useShortsV2PlayerPool(
 
       const handleCanPlay = () => {
         const curr = elementStatesRef.current.get(index);
+        if (videoElementsRef.current.get(index) !== el) return;
+        const status = userPausedElementRef.current === el ? 'PAUSED' : 'CAN_PLAY';
         if (curr && el) {
           curr.isReady = true;
           curr.readyState = el.readyState;
-          curr.status = 'CAN_PLAY';
+          curr.status = status;
           const startTime = loadStartTimesRef.current.get(index);
           if (startTime && curr.timeToCanplayMs === null) {
             curr.timeToCanplayMs = Math.round(performance.now() - startTime);
@@ -410,7 +423,7 @@ export function useShortsV2PlayerPool(
         }
 
         setReadyMap((prev) => ({ ...prev, [index]: true }));
-        setStatusMap((prev) => ({ ...prev, [index]: 'CAN_PLAY' }));
+        setStatusMap((prev) => ({ ...prev, [index]: status }));
 
         // If this slot is the currently active short, start playing immediately!
         if (index === activeIndexRef.current && el?.paused) {
@@ -470,15 +483,15 @@ export function useShortsV2PlayerPool(
       };
 
       const handlePause = () => {
-        if (videoElementsRef.current.get(index) === el) pauseActivity(video.youtube_video_id || video.id);
+        if (videoElementsRef.current.get(index) !== el || !el?.paused) return;
+        pauseActivity(video.youtube_video_id || video.id);
         const curr = elementStatesRef.current.get(index);
         if (curr) {
           curr.isPlaying = false;
           curr.paused = true;
-          if (curr.status === 'PLAYING') {
-            curr.status = 'PAUSED';
-            setStatusMap((prev) => ({ ...prev, [index]: 'PAUSED' }));
-          }
+          curr.status = 'PAUSED';
+          setStatusMap((prev) => ({ ...prev, [index]: 'PAUSED' }));
+          setPlayingMap((prev) => prev[index] ? { ...prev, [index]: false } : prev);
         }
       };
 
@@ -607,6 +620,7 @@ export function useShortsV2PlayerPool(
     // 1. Immediately pause and mute all non-active elements
     videoElementsRef.current.forEach((el, idx) => {
       if (idx !== activeIndex) {
+        if (userPausedElementRef.current === el) userPausedElementRef.current = null;
         try {
           el.pause();
           el.currentTime = 0;
@@ -732,7 +746,7 @@ export function useShortsV2PlayerPool(
   // Audio mute/unmute synchronization when user gesture or mute changes
   useEffect(() => {
     const activeEl = videoElementsRef.current.get(activeIndex);
-    if (!activeEl) return;
+    if (!activeEl || !hostContainersRef.current.get(activeIndex)?.contains(activeEl)) return;
 
     if (hasUserGestureUnlocked && !isMuted) {
       activeEl.muted = false;
@@ -742,6 +756,18 @@ export function useShortsV2PlayerPool(
     }
   }, [activeIndex, isMuted, hasUserGestureUnlocked]);
 
+  const togglePlayback = useCallback(() => {
+    const activeEl = videoElementsRef.current.get(activeIndex);
+    if (!activeEl) return;
+    if (activeEl.paused) {
+      userPausedElementRef.current = null;
+      safePlayVideo(activeEl, activeIndex);
+    } else {
+      userPausedElementRef.current = activeEl;
+      activeEl.pause();
+    }
+  }, [activeIndex, safePlayVideo]);
+
   // Handle tap gesture anywhere on the video
   const handleUserGesturePlayback = useCallback(() => {
     const activeEl = videoElementsRef.current.get(activeIndex);
@@ -750,22 +776,18 @@ export function useShortsV2PlayerPool(
     try {
       if (!hasUserGestureUnlocked) {
         // First tap unlocks audio for the entire session
+        userPausedElementRef.current = null;
         setGestureUnlocked(true);
         activeEl.muted = false;
         activeEl.volume = 1.0;
         activeEl.play().catch(() => {});
       } else {
-        // Subsequent taps toggle play / pause
-        if (activeEl.paused) {
-          activeEl.play().catch(() => {});
-        } else {
-          activeEl.pause();
-        }
+        togglePlayback();
       }
     } catch {
       // ignore
     }
-  }, [activeIndex, hasUserGestureUnlocked, setGestureUnlocked]);
+  }, [activeIndex, hasUserGestureUnlocked, setGestureUnlocked, togglePlayback]);
 
   // Explicit retry action for UI error card
   const retryVideo = useCallback(
@@ -852,6 +874,7 @@ export function useShortsV2PlayerPool(
     statusMap,
     errorMap,
     progressMap,
+    togglePlayback,
     handleUserGesturePlayback,
     retryVideo,
     debugInfo,

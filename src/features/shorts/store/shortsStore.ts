@@ -25,7 +25,7 @@ interface ShortsStoreState {
 export const useShortsFeatureStore = create<ShortsStoreState>((set) => ({
   isMuted: true,
   setMuted: (muted) => set({ isMuted: muted }),
-  toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+  toggleMute: () => set((state) => ({ isMuted: !state.isMuted, hasUserGestureUnlocked: true })),
 
   hasUserGestureUnlocked: false,
   setGestureUnlocked: (unlocked) => set({ hasUserGestureUnlocked: unlocked, isMuted: !unlocked }),

@@ -67,7 +67,8 @@ export default function RootLayout({
                   } else {
                     document.documentElement.classList.remove('dark');
                   }
-                  var color = isDark ? '#0F0F0F' : '#FFFFFF';
+                  var darkStatusBar = isDark || window.location.pathname === '/shorts';
+                  var color = darkStatusBar ? '#0F0F0F' : '#FFFFFF';
                   var metas = document.querySelectorAll('meta[name="theme-color"]');
                   if (metas.length > 0) {
                     metas.forEach(function(m) {
@@ -80,10 +81,9 @@ export default function RootLayout({
                     m.setAttribute('content', color);
                     document.head.appendChild(m);
                   }
-                  var apple = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-                  if (apple) {
-                    apple.setAttribute('content', isDark ? 'black-translucent' : 'default');
-                  }
+                  document.querySelectorAll('meta[name="apple-mobile-web-app-status-bar-style"]').forEach(function(apple) {
+                    apple.setAttribute('content', darkStatusBar ? 'black-translucent' : 'default');
+                  });
                 } catch(e) {}
               })();
             `,

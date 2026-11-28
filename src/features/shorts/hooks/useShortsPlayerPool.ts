@@ -57,6 +57,7 @@ interface PlayerPoolEntry {
   hostDiv: HTMLDivElement;
   isReady: boolean;
   isPrimed: boolean;
+  pausedByUser: boolean;
   hasError: boolean;
   errorMessage: string | null;
   state: ShortPlaybackState;
@@ -231,7 +232,7 @@ export function useShortsPlayerPool(
 
   // Safe play implementation with platform autoplay handling (iOS vs Android)
   const safePlayV1 = useCallback((player: any, index: number) => {
-    if (index !== activeIndexRef.current || !player) return;
+    if (index !== activeIndexRef.current || !player || poolRef.current.get(index)?.pausedByUser) return;
 
     try {
       if (hasUserGestureUnlockedRef.current && !isMutedRef.current) {
@@ -259,7 +260,7 @@ export function useShortsPlayerPool(
   const startActiveWatchdog = useCallback(
     (index: number, video?: ShortVideo) => {
       const entry = poolRef.current.get(index);
-      if (!entry || !entry.player) return;
+      if (!entry || !entry.player || entry.pausedByUser) return;
 
       if (entry.watchdogTimer) {
         clearTimeout(entry.watchdogTimer);
@@ -398,6 +399,7 @@ export function useShortsPlayerPool(
           hostDiv,
           isReady: false,
           isPrimed: false,
+          pausedByUser: false,
           hasError: false,
           errorMessage: null,
           state: 'LOADING',
@@ -487,7 +489,7 @@ export function useShortsPlayerPool(
                 // Autoplay policy or cue state recovery
                 if (index === activeIndexRef.current) {
                   setTimeout(() => {
-                    if (index === activeIndexRef.current && entry.player) {
+                    if (index === activeIndexRef.current && !entry.pausedByUser && poolRef.current.get(index) === entry) {
                       try {
                         entry.player.playVideo();
                       } catch {}
@@ -546,7 +548,7 @@ export function useShortsPlayerPool(
     [destroySlot, recordTransition, safePlayV1, startActiveWatchdog]
   );
 
-  // Synchronize playback and audio when activeIndex, isMuted, or gesture unlock changes
+  // Changing shorts starts the active player. Changing volume must preserve playback.
   useEffect(() => {
     const currentActive = activeIndex;
 
@@ -566,6 +568,7 @@ export function useShortsPlayerPool(
           }
           // If not ready yet, onReady will invoke safePlayV1 + startActiveWatchdog
         } else {
+          entry.pausedByUser = false;
           if (entry.watchdogTimer) {
             clearTimeout(entry.watchdogTimer);
             entry.watchdogTimer = null;
@@ -597,7 +600,35 @@ export function useShortsPlayerPool(
         destroySlot(idx);
       }
     });
-  }, [activeIndex, isMuted, hasUserGestureUnlocked, destroySlot, safePlayV1, startActiveWatchdog]);
+  }, [activeIndex, destroySlot, safePlayV1, startActiveWatchdog]);
+
+  useEffect(() => {
+    const entry = poolRef.current.get(activeIndex);
+    if (!entry?.isReady) return;
+    if (isMuted || !hasUserGestureUnlocked) {
+      entry.player.mute();
+    } else {
+      entry.player.unMute();
+      entry.player.setVolume(100);
+    }
+  }, [activeIndex, isMuted, hasUserGestureUnlocked]);
+
+  const togglePlayback = useCallback(() => {
+    const entry = poolRef.current.get(activeIndex);
+    if (!entry?.isReady) return;
+
+    const state = entry.player.getPlayerState();
+    if (state === window.YT.PlayerState.PLAYING || state === window.YT.PlayerState.BUFFERING) {
+      entry.pausedByUser = true;
+      if (entry.watchdogTimer) clearTimeout(entry.watchdogTimer);
+      entry.watchdogTimer = null;
+      entry.player.pauseVideo();
+    } else {
+      entry.pausedByUser = false;
+      safePlayV1(entry.player, activeIndex);
+      startActiveWatchdog(activeIndex);
+    }
+  }, [activeIndex, safePlayV1, startActiveWatchdog]);
 
   // Handle tap gesture anywhere on the video
   const handleUserGesturePlayback = useCallback(() => {
@@ -607,29 +638,18 @@ export function useShortsPlayerPool(
     try {
       if (!hasUserGestureUnlocked) {
         // First tap unlocks audio for the entire session
+        entry.pausedByUser = false;
         setGestureUnlocked(true);
         entry.player.unMute();
         entry.player.setVolume(100);
         entry.player.playVideo();
       } else {
-        // Subsequent taps toggle play / pause
-        const state = entry.player.getPlayerState?.();
-        if (state === 1) {
-          entry.player.pauseVideo();
-        } else {
-          if (!isMuted) {
-            try {
-              entry.player.unMute();
-              entry.player.setVolume(100);
-            } catch {}
-          }
-          entry.player.playVideo();
-        }
+        togglePlayback();
       }
     } catch {
       // ignore
     }
-  }, [activeIndex, hasUserGestureUnlocked, isMuted, setGestureUnlocked]);
+  }, [activeIndex, hasUserGestureUnlocked, setGestureUnlocked, togglePlayback]);
 
   // Explicit retry action for V1
   const retryV1Player = useCallback(
@@ -708,6 +728,7 @@ export function useShortsPlayerPool(
     errorMap,
     progressMap,
     statusMap,
+    togglePlayback,
     handleUserGesturePlayback,
     retryV1Player,
     getDiagnosticLogs,

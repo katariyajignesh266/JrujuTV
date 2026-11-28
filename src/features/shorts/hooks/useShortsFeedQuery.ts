@@ -61,6 +61,7 @@ export function useShortsFeedQuery(initialized: boolean) {
 
   const [videos, setVideos] = useState<ShortVideo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [totalEligible, setTotalEligible] = useState(0);
@@ -76,14 +77,17 @@ export function useShortsFeedQuery(initialized: boolean) {
     try {
       isFetchingRef.current = true;
       setLoading(true);
+      setLoadFailed(false);
       cursorRef.current = 0;
       const res = await fetchShortsFeed(seedRef.current, 0, PAGE_SIZE);
       const cleaned = sanitizeAndDedupe(res.videos || [], [], unplayableIdsRef.current);
       setVideos(cleaned);
+      useShortsFeatureStore.getState().setActiveIndex(0);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor ?? cleaned.length;
       setTotalEligible(res.total);
     } catch (err) {
+      setLoadFailed(true);
       console.error('Error loading initial shorts feed:', err);
     } finally {
       setLoading(false);
@@ -158,6 +162,7 @@ export function useShortsFeedQuery(initialized: boolean) {
       seedRef.current = Math.floor(Math.random() * 1000000);
       await loadInitialFeed();
     } catch (err) {
+      setLoadFailed(true);
       console.error('Failed to replay shorts:', err);
       setLoading(false);
     }
@@ -166,6 +171,7 @@ export function useShortsFeedQuery(initialized: boolean) {
   return {
     videos,
     loading,
+    loadFailed,
     loadingMore,
     hasMore,
     totalEligible,
