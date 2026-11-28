@@ -37,14 +37,14 @@ async function addDayCards(admin: SupabaseClient, viewer: string, child: string,
     return
   }
 
-  const references = new Map<string,string>()
+  const references = new Map<string,{video:string;title:string|null}>()
   const videos = new Map<string,CatalogVideo>()
   const progress = new Map<string,Progress>()
   for (const ids of batches(starts.map(start => start.id))) {
-    const {data} = await admin.from('child_activity_events').select('id,video').in('id', ids).throwOnError()
-    for (const event of data ?? []) references.set(event.id,event.video)
+    const {data} = await admin.from('child_activity_events').select('id,video,title').in('id', ids).throwOnError()
+    for (const event of data ?? []) references.set(event.id,{video:event.video,title:event.title ?? null})
   }
-  const keys = [...new Set(references.values())]
+  const keys = [...new Set([...references.values()].map(r => r.video))]
   for (const column of ['id','youtube_video_id'] as const) {
     const valid = keys.filter(key => column === 'id' ? uuid.test(key) : /^[\w-]{11}$/.test(key))
     for (const ids of batches(valid)) {
@@ -75,19 +75,44 @@ async function addDayCards(admin: SupabaseClient, viewer: string, child: string,
       }
     }
   }
+  const stillUnresolved = keys.filter(key => !videos.has(key))
+  for (const column of ['id','youtube_video_id'] as const) {
+    const valid = stillUnresolved.filter(key => column === 'id' ? uuid.test(key) : /^[\w-]{11}$/.test(key))
+    for (const ids of batches(valid)) {
+      const {data} = await admin.from('videos').select('id,youtube_video_id,title,thumbnail_url,channels(title,parent_id)')
+        .in(column,ids).throwOnError()
+      for (const video of (data ?? []) as unknown as CatalogVideo[]) {
+        if (!videos.has(video[column])) videos.set(video[column],video)
+      }
+    }
+  }
   for (const start of starts) {
-    const video = videos.get(references.get(start.id) ?? '')
+    const ref = references.get(start.id)
+    const video = videos.get(ref?.video ?? '')
     start.title = null // Old RPCs put the raw video key here when the event lacks a title.
-    start.card = video ? makeCard(video,progress.get(video.id)) : null
+    if (video) {
+      start.card = makeCard(video,progress.get(video.id))
+    } else if (ref?.video && /^[\w-]{11}$/.test(ref.video)) {
+      start.card = {
+        target: ref.video,
+        title: ref.title || 'Untitled video',
+        thumbnail: 'https://i.ytimg.com/vi/'+ref.video+'/hqdefault.jpg',
+        channel: '',
+        percent: null,
+        resume: 0,
+      }
+    } else {
+      start.card = null
+    }
   }
 }
 
-type CatalogVideo = {id:string; youtube_video_id:string; title:string; thumbnail_url:string; channels:{title:string; parent_id:string}}
+type CatalogVideo = {id:string; youtube_video_id:string; title:string; thumbnail_url:string; channels?:{title:string; parent_id:string}|null}
 type Progress = {progress_percent:number; absolute_position:number}
 
 function makeCard(video: CatalogVideo, progress?: Progress) {
   return {target:video.youtube_video_id || video.id, title:video.title, thumbnail:video.thumbnail_url || (/^[\w-]{11}$/.test(video.youtube_video_id) ? 'https://i.ytimg.com/vi/'+video.youtube_video_id+'/hqdefault.jpg' : ''),
-    channel:video.channels.title, percent:progress?.progress_percent ?? null, resume:progress?.absolute_position ?? 0}
+    channel:video.channels?.title ?? '', percent:progress?.progress_percent ?? null, resume:progress?.absolute_position ?? 0}
 }
 
 function* batches(ids: string[]) {

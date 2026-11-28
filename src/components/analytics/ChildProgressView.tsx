@@ -76,6 +76,7 @@ export function ChildProgressView({ childId, accessToken }: ChildProgressViewPro
   const [summary, setSummary] = useState<WatchSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryRetry, setSummaryRetry] = useState(0);
 
   // All-channels expand state
   const [showAllChannels, setShowAllChannels] = useState(false);
@@ -121,7 +122,7 @@ export function ChildProgressView({ childId, accessToken }: ChildProgressViewPro
     fetchSummary();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [childId, accessToken]);
+  }, [childId, accessToken, summaryRetry]);
 
   // ── All-channels fetch ────────────────────────────────────────────────────
   const handleToggleAllChannels = async () => {
@@ -198,7 +199,18 @@ export function ChildProgressView({ childId, accessToken }: ChildProgressViewPro
               <div key={i} className="h-9 rounded-xl bg-surface-secondary animate-pulse" />
             ))}
           </div>
-        ) : summaryError ? null : displayedChannels.length === 0 ? (
+        ) : summaryError ? (
+          <div role="alert" className="text-fluid-sm text-content-secondary text-center py-4 space-y-1">
+            <p>{summaryError}</p>
+            <button
+              type="button"
+              onClick={() => setSummaryRetry((n) => n + 1)}
+              className="text-brand-primary font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : displayedChannels.length === 0 ? (
           <p className="text-fluid-sm text-content-disabled text-center py-4">
             No channels watched yet
           </p>

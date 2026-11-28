@@ -8,15 +8,21 @@ export async function POST(request: Request) {
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || (!serviceKey && !anonKey)) {
     return Response.json({ error: 'Service configuration missing' }, { status: 503 });
   }
 
   try {
     const token = authorization.slice(7);
-    const admin = createClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const admin = serviceKey
+      ? createClient(url, serviceKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+      : createClient(url, anonKey!, {
+          global: { headers: { Authorization: authorization } },
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
 
     const { data: { user }, error: userError } = await admin.auth.getUser(token);
     if (userError || !user) {

@@ -16,6 +16,23 @@ export async function POST(request: Request) {
   if (!url || !apiKey) return Response.json({code:'SERVICE_CONFIGURATION'}, {status:503});
 
   try {
+    if (body.kind === 'day' && uuid.test(body.child_id) && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+      const db = serviceKey
+        ? createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+        : createClient(url, apiKey, {
+            global: { headers: { Authorization: authorization } },
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
+      const { data: { user } } = await db.auth.getUser(authorization.slice(7));
+      const isChild = user?.app_metadata?.role === 'child' || user?.user_metadata?.role === 'child';
+      if (user && !isChild && user.id === body.child_id) {
+        if (body.timezone !== undefined && body.timezone !== 'Asia/Kolkata') {
+          return Response.json({ code: 'INVALID_ACTIVITY' }, { status: 400 });
+        }
+        return await loadParentSelfDay(db, user.id, body.date);
+      }
+    }
+
     if (body.kind !== 'day' || !serviceKey) {
       // The Edge writer also dispatches push immediately. A gateway-confirmed missing
       // function can safely fall back to the same idempotent Postgres writer.
@@ -36,16 +53,6 @@ export async function POST(request: Request) {
     if (!serviceKey) return Response.json({code:'ACTIVITY_ROUTE_MISSING'}, {status:503});
     const { childActivity } = await import('../../../../supabase/functions/_shared/childActivity');
     const admin = createClient(url,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
-    if (body.kind === 'day' && uuid.test(body.child_id) && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
-      const { data: { user } } = await admin.auth.getUser(authorization.slice(7));
-      const isChild = user?.app_metadata?.role === 'child' || user?.user_metadata?.role === 'child';
-      if (user && !isChild && user.id === body.child_id) {
-        if (body.timezone !== undefined && body.timezone !== 'Asia/Kolkata') {
-          return Response.json({code:'INVALID_ACTIVITY'}, {status:400});
-        }
-        return await loadParentSelfDay(admin, user.id, body.date);
-      }
-    }
     return await childActivity(admin,authorization.slice(7),body,received);
   } catch {
     return Response.json({code:'ACTIVITY_SERVICE_UNAVAILABLE'},{status:503});
@@ -55,7 +62,7 @@ export async function POST(request: Request) {
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const youtube = /^[\w-]{11}$/;
-type Video = { id:string; youtube_video_id:string; title:string; thumbnail_url:string; channels:{ title:string } };
+type Video = { id:string; youtube_video_id:string; title:string; thumbnail_url:string; channels:{ title:string }|null };
 
 // Older Edge deployments return the event's title (or video key) without a card.
 // Resolve only omissions. An explicit null is the current service's unavailable result.
@@ -64,9 +71,9 @@ async function completeLegacyDay(day: ActivityDay, child: string, date: string, 
   const needsHistory = !day.visits.length && day.has_watch_history === true && day.history === undefined;
   if (!starts.length && !needsHistory) return;
   const db = createClient(url, apiKey, {global:{headers:{Authorization:token}},auth:{persistSession:false,autoRefreshToken:false}});
-  const fields = 'id,youtube_video_id,title,thumbnail_url,channels!inner(title)';
+  const fields = 'id,youtube_video_id,title,thumbnail_url,channels(title)';
   const makeCard = (v:Video, pct:number|null, resume:number) => ({
-    target:v.youtube_video_id || v.id, title:v.title, thumbnail:v.thumbnail_url || (youtube.test(v.youtube_video_id) ? 'https://i.ytimg.com/vi/'+v.youtube_video_id+'/hqdefault.jpg' : ''), channel:v.channels.title, percent:pct, resume
+    target:v.youtube_video_id || v.id, title:v.title, thumbnail:v.thumbnail_url || (youtube.test(v.youtube_video_id) ? 'https://i.ytimg.com/vi/'+v.youtube_video_id+'/hqdefault.jpg' : ''), channel:v.channels?.title ?? '', percent:pct, resume
   });
   if (needsHistory) {
     const from = new Date(date+'T00:00:00+05:30');
@@ -89,13 +96,13 @@ async function completeLegacyDay(day: ActivityDay, child: string, date: string, 
   for (const column of ['id','youtube_video_id','title'] as const) {
     const candidates = keys.filter(k=>column==='id'?uuid.test(k):column==='youtube_video_id'?youtube.test(k):!matches.has(k));
     for (let i=0;i<candidates.length;i+=12) {
-      const values = candidates.slice(i,i+12).map(k=>JSON.stringify(k)).join(',');
+      const slice = candidates.slice(i,i+12);
       for (let offset=0; ; offset+=200) {
-        const {data} = await db.from('videos').select(fields).filter(column,'in','('+values+')')
+        const {data} = await db.from('videos').select(fields).in(column,slice)
           .order('id').range(offset,offset+199).throwOnError();
         for (const video of (data ?? []) as unknown as Video[]) {
           const key = video[column];
-          matches.set(key,matches.has(key)?null:video);
+          if (!matches.has(key)) matches.set(key,video);
         }
         if ((data?.length ?? 0)<200) break;
       }
@@ -123,7 +130,7 @@ async function loadParentSelfDay(
 ) {
   const from = new Date(date + 'T00:00:00+05:30');
   const until = new Date(from.getTime() + 86400000);
-  const fields = 'id,youtube_video_id,title,thumbnail_url,channels!inner(title)';
+  const fields = 'id,youtube_video_id,title,thumbnail_url,channels(title)';
 
   const { data: daily } = await admin
     .from('child_watch_daily')
@@ -171,7 +178,7 @@ async function loadParentSelfDay(
                 (youtube.test(v.youtube_video_id)
                   ? `https://i.ytimg.com/vi/${v.youtube_video_id}/hqdefault.jpg`
                   : ''),
-              channel: v.channels.title,
+              channel: v.channels?.title || 'Channel unavailable',
               percent: row.progress_percent,
               resume: row.absolute_position,
             }
